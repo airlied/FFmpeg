@@ -80,6 +80,9 @@ enum {
     AV1_MAX_TILE_ROWS  = 64,
     AV1_MAX_TILE_COLS  = 64,
 
+    AV1_LOG2_MAX_TILE_ROWS  = 6,
+    AV1_LOG2_MAX_TILE_COLS  = 6,
+
     AV1_NUM_REF_FRAMES       = 8,
     AV1_REFS_PER_FRAME       = 7,
     AV1_TOTAL_REFS_PER_FRAME = 8,
