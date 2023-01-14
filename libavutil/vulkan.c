@@ -547,6 +547,11 @@ int ff_vk_exec_add_dep_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef
     AVVkFrame *f = (AVVkFrame *)vkfb->data;
     int nb_images = ff_vk_count_images(f);
 
+    /* Don't add duplicates */
+    for (int i = 0; i < e->nb_frame_deps; i++)
+        if (e->frame_deps[i]->data == vkfb->data)
+            return 0;
+
 #define ARR_REALLOC(str, arr, alloc_s, cnt)                               \
     do {                                                                  \
         arr = av_fast_realloc(str->arr, alloc_s, (cnt + 1)*sizeof(*arr)); \
@@ -606,15 +611,18 @@ int ff_vk_exec_add_dep_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef
     return 0;
 }
 
-void ff_vk_exec_update_frame(FFVulkanContext *s, FFVkExecContext *e,
-                             AVBufferRef *vkfb,
-                             VkImageMemoryBarrier2 *bar)
+void ff_vk_exec_update_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef *vkfb,
+                             VkImageMemoryBarrier2 *bar, uint32_t *nb_img_bar)
 {
     int i;
     for (i = 0; i < e->nb_frame_deps; i++)
         if (e->frame_deps[i]->data == vkfb->data)
             break;
     av_assert0(i < e->nb_frame_deps);
+
+    /* Don't update duplicates */
+    if (nb_img_bar && !e->frame_update[i])
+        (*nb_img_bar)++;
 
     e->queue_family_dst[i] = bar->dstQueueFamilyIndex;
     e->access_dst[i] = bar->dstAccessMask;

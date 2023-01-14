@@ -337,7 +337,7 @@ int ff_vk_exec_add_dep_buf(FFVulkanContext *s, FFVkExecContext *e,
 int ff_vk_exec_add_dep_frame(FFVulkanContext *s, FFVkExecContext *e,
                              AVBufferRef *vkfb, VkPipelineStageFlagBits in_wait_dst_flag);
 void ff_vk_exec_update_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef *vkfb,
-                             VkImageMemoryBarrier2 *bar);
+                             VkImageMemoryBarrier2 *bar, uint32_t *nb_img_bar);
 void ff_vk_exec_discard_deps(FFVulkanContext *s, FFVkExecContext *e);
 
 /**
