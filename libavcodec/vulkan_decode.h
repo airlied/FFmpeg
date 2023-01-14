@@ -40,6 +40,7 @@ typedef struct FFVulkanDecodeContext {
 
     VkVideoDecodeH264ProfileInfoKHR h264_profile;
     VkVideoDecodeH264ProfileInfoKHR h265_profile;
+    VkVideoDecodeAV1ProfileInfoMESA av1_profile;
     VkVideoSessionParametersKHR empty_session_params;
 
     VkSamplerYcbcrConversion yuv_sampler;

@@ -43,6 +43,12 @@ const FFVkCodecMap ff_vk_codec_map[AV_CODEC_ID_FIRST_AUDIO] = {
                            FF_VK_EXT_VIDEO_DECODE_H265 | FF_VK_EXT_SYNC2,
                            VK_VIDEO_CODEC_OPERATION_DECODE_H265_BIT_KHR
     },
+    [AV_CODEC_ID_AV1] = {
+                           0,
+                           0,
+                           FF_VK_EXT_VIDEO_DECODE_AV1 | FF_VK_EXT_SYNC2,
+                           VK_VIDEO_CODEC_OPERATION_DECODE_AV1_BIT_MESA
+    },
 };
 
 enum AVPixelFormat ff_vk_pix_fmt_from_vkfmt(VkFormat vkf, int *score)

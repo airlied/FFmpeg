@@ -26,6 +26,9 @@ extern const VkExtensionProperties ff_vk_dec_h264_ext;
 #if CONFIG_HEVC_VULKAN_HWACCEL
 extern const VkExtensionProperties ff_vk_dec_hevc_ext;
 #endif
+#if CONFIG_AV1_VULKAN_HWACCEL
+extern const VkExtensionProperties ff_vk_dec_av1_ext;
+#endif
 
 static const VkExtensionProperties *dec_ext[] = {
 #if CONFIG_H264_VULKAN_HWACCEL
@@ -33,6 +36,9 @@ static const VkExtensionProperties *dec_ext[] = {
 #endif
 #if CONFIG_HEVC_VULKAN_HWACCEL
     [AV_CODEC_ID_HEVC] = &ff_vk_dec_hevc_ext,
+#endif
+#if CONFIG_AV1_VULKAN_HWACCEL
+    [AV_CODEC_ID_AV1] = &ff_vk_dec_av1_ext,
 #endif
 };
 
@@ -523,6 +529,9 @@ static int vulkan_decode_check_init(AVCodecContext *avctx, AVBufferRef *frames_r
     VkVideoDecodeH264ProfileInfoKHR local_h265_profile = { 0 };
     VkVideoDecodeH264ProfileInfoKHR *h265_profile = ctx ? &ctx->h265_profile : &local_h265_profile;
 
+    VkVideoDecodeAV1ProfileInfoMESA local_av1_profile = { 0 };
+    VkVideoDecodeAV1ProfileInfoMESA *av1_profile = ctx ? &ctx->av1_profile : &local_av1_profile;
+
     VkPhysicalDeviceVideoFormatInfoKHR fmt_info = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_FORMAT_INFO_KHR,
         .pNext = profile_list,
@@ -532,6 +541,9 @@ static int vulkan_decode_check_init(AVCodecContext *avctx, AVBufferRef *frames_r
     };
     VkVideoDecodeH265CapabilitiesKHR h265_caps = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_CAPABILITIES_KHR,
+    };
+    VkVideoDecodeAV1CapabilitiesMESA av1_caps = {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_CAPABILITIES_MESA,
     };
     VkVideoFormatPropertiesKHR *ret_info;
     uint32_t nb_out_fmts = 0;
@@ -583,6 +595,12 @@ repeat:
         usage->pNext = h265_profile;
         h265_profile->sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_PROFILE_INFO_KHR;
         h265_profile->stdProfileIdc = cur_profile;
+    } else if (avctx->codec_id == AV_CODEC_ID_AV1) {
+        base_profile = STD_VIDEO_AV1_PROFILE_MAIN;
+        dec_caps->pNext = &av1_caps;
+        usage->pNext = av1_profile;
+        av1_profile->sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_PROFILE_INFO_MESA;
+        av1_profile->stdProfileIdc = cur_profile;
     }
 
     usage->sType           = VK_STRUCTURE_TYPE_VIDEO_DECODE_USAGE_INFO_KHR;
@@ -639,6 +657,7 @@ repeat:
 
     max_level = avctx->codec_id == AV_CODEC_ID_H264 ? h264_caps.maxLevelIdc :
                 avctx->codec_id == AV_CODEC_ID_H265 ? h265_caps.maxLevelIdc :
+                avctx->codec_id == AV_CODEC_ID_AV1  ? av1_caps.maxLevelIdc  :
                 0;
 
     if (ctx) {
@@ -898,10 +917,14 @@ int ff_vk_decode_init(AVCodecContext *avctx)
     VkVideoDecodeH265SessionParametersCreateInfoKHR h265_params = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_SESSION_PARAMETERS_CREATE_INFO_KHR,
     };
+    VkVideoDecodeAV1SessionParametersCreateInfoMESA av1_params = {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_SESSION_PARAMETERS_CREATE_INFO_MESA,
+    };
     VkVideoSessionParametersCreateInfoKHR session_params_create = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_PARAMETERS_CREATE_INFO_KHR,
         .pNext = avctx->codec_id == AV_CODEC_ID_H264 ? (void *)&h264_params :
                  avctx->codec_id == AV_CODEC_ID_HEVC ? (void *)&h265_params :
+                 avctx->codec_id == AV_CODEC_ID_AV1  ? (void *)&av1_params  :
                  NULL,
     };
     VkVideoSessionCreateInfoKHR session_create = {
@@ -987,7 +1010,7 @@ int ff_vk_decode_init(AVCodecContext *avctx)
     }
 
     /* If doing an out-of-place decoding, create a DPB pool */
-    if (ctx->dedicated_dpb) {
+    if (ctx->dedicated_dpb || avctx->codec_id == AV_CODEC_ID_AV1) {
         AVHWFramesContext *dpb_frames;
         AVVulkanFramesContext *dpb_hwfc;
 
