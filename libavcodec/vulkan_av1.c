@@ -239,7 +239,7 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
         return err;
 
     /* Fill in references */
-    for (int i = 0; i < AV1_NUM_REF_FRAMES; i++) {
+    for (int i = 0; i < AV1_REFS_PER_FRAME; i++) {
         const AV1Frame *ref_frame = &s->ref[i];
         int idx = frame_header->ref_frame_idx[i];
 
