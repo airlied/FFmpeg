@@ -508,6 +508,7 @@ void ff_vk_exec_discard_deps(FFVulkanContext *s, FFVkExecContext *e)
 
     e->sem_wait_cnt = 0;
     e->sem_sig_cnt = 0;
+    e->sem_sig_val_dst_cnt = 0;
 }
 
 int ff_vk_exec_add_dep_buf(FFVulkanContext *s, FFVkExecContext *e,
@@ -550,7 +551,7 @@ int ff_vk_exec_add_dep_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef
     /* Don't add duplicates */
     for (int i = 0; i < e->nb_frame_deps; i++)
         if (e->frame_deps[i]->data == vkfb->data)
-            return 0;
+            return 1;
 
 #define ARR_REALLOC(str, arr, alloc_s, cnt)                               \
     do {                                                                  \
@@ -575,7 +576,7 @@ int ff_vk_exec_add_dep_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef
         ARR_REALLOC(e, sem_wait_val, &e->sem_wait_val_alloc, e->sem_wait_cnt);
         ARR_REALLOC(e, sem_sig, &e->sem_sig_alloc, e->sem_sig_cnt);
         ARR_REALLOC(e, sem_sig_val, &e->sem_sig_val_alloc, e->sem_sig_cnt);
-        ARR_REALLOC(e, sem_sig_val_dst, &e->sem_sig_val_dst_alloc, e->sem_sig_cnt);
+        ARR_REALLOC(e, sem_sig_val_dst, &e->sem_sig_val_dst_alloc, e->sem_sig_val_dst_cnt);
 
         e->sem_wait[e->sem_wait_cnt] = f->sem[i];
         e->sem_wait_dst[e->sem_wait_cnt] = in_wait_dst_flag;
@@ -584,8 +585,9 @@ int ff_vk_exec_add_dep_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef
 
         e->sem_sig[e->sem_sig_cnt] = f->sem[i];
         e->sem_sig_val[e->sem_sig_cnt] = f->sem_value[i] + 1;
-        e->sem_sig_val_dst[e->sem_sig_cnt] = &f->sem_value[i];
+        e->sem_sig_val_dst[e->sem_sig_val_dst_cnt] = &f->sem_value[i];
         e->sem_sig_cnt++;
+        e->sem_sig_val_dst_cnt++;
     }
 
     ARR_REALLOC(e, layout_dst,       &e->layout_dst_alloc,       e->nb_frame_deps);
@@ -628,6 +630,32 @@ void ff_vk_exec_update_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef
     e->access_dst[i] = bar->dstAccessMask;
     e->layout_dst[i] = bar->newLayout;
     e->frame_update[i] = 1;
+}
+
+int ff_vk_exec_mirror_sem_value(FFVulkanContext *s, FFVkExecContext *e,
+                                VkSemaphore *dst, uint64_t *dst_val,
+                                AVBufferRef *vkfb)
+{
+    uint64_t **sem_sig_val_dst;
+    AVVkFrame *f = (AVVkFrame *)vkfb->data;
+
+    /* Reject unknown frames */
+    int i;
+    for (i = 0; i < e->nb_frame_deps; i++)
+        if (e->frame_deps[i]->data == vkfb->data)
+            break;
+    if (i == e->nb_frame_deps)
+        return AVERROR(EINVAL);
+
+    ARR_REALLOC(e, sem_sig_val_dst, &e->sem_sig_val_dst_alloc, e->sem_sig_val_dst_cnt);
+
+    *dst     = f->sem[0];
+    *dst_val = f->sem_value[0];
+
+    e->sem_sig_val_dst[e->sem_sig_val_dst_cnt] = dst_val;
+    e->sem_sig_val_dst_cnt++;
+
+    return 0;
 }
 
 int ff_vk_exec_submit(FFVulkanContext *s, FFVkExecContext *e)
@@ -677,7 +705,7 @@ int ff_vk_exec_submit(FFVulkanContext *s, FFVkExecContext *e)
         return AVERROR_EXTERNAL;
     }
 
-    for (int i = 0; i < e->sem_sig_cnt; i++)
+    for (int i = 0; i < e->sem_sig_val_dst_cnt; i++)
         *e->sem_sig_val_dst[i] += 1;
 
     /* Unlock all frames */

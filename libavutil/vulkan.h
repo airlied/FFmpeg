@@ -180,6 +180,7 @@ typedef struct FFVkExecContext {
 
     uint64_t **sem_sig_val_dst;
     unsigned int sem_sig_val_dst_alloc;
+    int sem_sig_val_dst_cnt;
 
     uint8_t *frame_locked;
     unsigned int frame_locked_alloc_size;
@@ -338,6 +339,9 @@ int ff_vk_exec_add_dep_frame(FFVulkanContext *s, FFVkExecContext *e,
                              AVBufferRef *vkfb, VkPipelineStageFlagBits in_wait_dst_flag);
 void ff_vk_exec_update_frame(FFVulkanContext *s, FFVkExecContext *e, AVBufferRef *vkfb,
                              VkImageMemoryBarrier2 *bar, uint32_t *nb_img_bar);
+int ff_vk_exec_mirror_sem_value(FFVulkanContext *s, FFVkExecContext *e,
+                                VkSemaphore *dst, uint64_t *dst_val,
+                                AVBufferRef *vkfb);
 void ff_vk_exec_discard_deps(FFVulkanContext *s, FFVkExecContext *e);
 
 /**
