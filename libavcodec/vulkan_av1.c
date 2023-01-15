@@ -43,9 +43,9 @@ typedef struct AV1VulkanDecodePicture {
     VkVideoDecodeAV1PictureInfoMESA av1_pic_info;
 
     /* Picture refs */
-    const AV1Frame                 *ref_src   [AV1_REFS_PER_FRAME];
-    StdVideoDecodeAV1ReferenceInfo  av1_refs  [AV1_REFS_PER_FRAME];
-    VkVideoDecodeAV1DpbSlotInfoMESA vkav1_refs[AV1_REFS_PER_FRAME];
+    const AV1Frame                 *ref_src   [AV1_NUM_REF_FRAMES];
+    StdVideoDecodeAV1ReferenceInfo  av1_refs  [AV1_NUM_REF_FRAMES];
+    VkVideoDecodeAV1DpbSlotInfoMESA vkav1_refs[AV1_NUM_REF_FRAMES];
 } AV1VulkanDecodePicture;
 
 static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
@@ -239,16 +239,14 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
         return err;
 
     /* Fill in references */
-    for (int i = 0; i < AV1_REFS_PER_FRAME; i++) {
+    for (int i = 0; i < AV1_NUM_REF_FRAMES; i++) {
         const AV1Frame *ref_frame = &s->ref[i];
-        int idx = frame_header->ref_frame_idx[i];
-
         if (s->ref[i].f->pict_type == AV_PICTURE_TYPE_NONE)
             continue;
 
         err = vk_av1_fill_pict(avctx, &ap->ref_src[i], &vp->ref_slots[i],
                                &vp->refs[i], &ap->vkav1_refs[i],
-                               &ap->av1_refs[i], ref_frame, 0, 0, idx);
+                               &ap->av1_refs[i], ref_frame, 0, 0, i);
         if (err < 0)
             return err;
 
