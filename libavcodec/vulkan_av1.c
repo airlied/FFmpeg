@@ -46,6 +46,9 @@ typedef struct AV1VulkanDecodePicture {
     const AV1Frame                 *ref_src   [AV1_NUM_REF_FRAMES];
     StdVideoDecodeAV1ReferenceInfo  av1_refs  [AV1_NUM_REF_FRAMES];
     VkVideoDecodeAV1DpbSlotInfoMESA vkav1_refs[AV1_NUM_REF_FRAMES];
+
+    uint8_t unique_idx_set;
+    uint32_t unique_idx;
 } AV1VulkanDecodePicture;
 
 static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
@@ -87,7 +90,7 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
     *ref_slot = (VkVideoReferenceSlotInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
         .pNext = vkav1_ref,
-        .slotIndex = dpb_slot_index,
+        .slotIndex = hp->unique_idx,
         .pPictureResource = ref,
     };
 
@@ -223,7 +226,7 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
 {
     int err;
     int ref_count = 0;
-    const AV1DecContext *s = avctx->priv_data;
+    AV1DecContext *s = avctx->priv_data;
     const AV1Frame *pic = &s->cur_frame;
     FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
     AV1VulkanDecodePicture *ap = pic->hwaccel_picture_private;
@@ -234,10 +237,26 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
     const int apply_grain = !(avctx->export_side_data & AV_CODEC_EXPORT_DATA_FILM_GRAIN) &&
                             film_grain->apply_grain;
 
+    if (!ap->unique_idx_set) {
+      unsigned slot_idx = 0;
+      for (unsigned i = 0; i < 32; i++) {
+	if (s->unique_slot_ids_mask & (1 << i))
+	  continue;
+	slot_idx = i;
+	break;
+      }
+      ap->unique_idx = slot_idx;
+      s->unique_slot_ids_mask |= (1 << slot_idx);
+      ap->unique_idx_set = 1;
+      fprintf(stderr, "allocated slot %p %d\n", ap, slot_idx);
+    }
+
     err = vk_av1_create_params(avctx, &vp->session_params);
     if (err < 0)
         return err;
 
+    fprintf(stderr, "frame header %d %d\n", frame_header->frame_type,
+	    frame_header->show_frame);
     /* Fill in references */
     for (int i = 0; i < AV1_NUM_REF_FRAMES; i++) {
         const AV1Frame *ref_frame = &s->ref[i];
@@ -255,7 +274,7 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
 
     err = vk_av1_fill_pict(avctx, NULL, &vp->ref_slot, &vp->ref,
                            &ap->vkav1_ref, &ap->av1_ref,
-                           pic, 1, apply_grain, ref_count);
+                           pic, 1, apply_grain, 0);
     if (err < 0)
         return err;
 
@@ -546,6 +565,12 @@ static int vk_av1_end_frame(AVCodecContext *avctx)
 static void vk_av1_free_frame_priv(AVCodecContext *avctx, void *data)
 {
     AV1VulkanDecodePicture *ap = data;
+    AV1DecContext *s = avctx->priv_data;
+
+    if (ap->unique_idx_set) {
+      s->unique_slot_ids_mask &= ~(1 << ap->unique_idx);
+      fprintf(stderr, "deallocated %p %d\n", ap, ap->unique_idx);
+    }
 
     /* Free frame resources, this also destroys the session parameters. */
     ff_vk_decode_free_frame(ap->ctx, &ap->vp);

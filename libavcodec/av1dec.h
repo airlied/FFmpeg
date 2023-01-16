@@ -81,6 +81,7 @@ typedef struct AV1DecContext {
 
     int operating_point_idc;
 
+    uint32_t unique_slot_ids_mask;
     AV1Frame ref[AV1_NUM_REF_FRAMES];
     AV1Frame cur_frame;
 
