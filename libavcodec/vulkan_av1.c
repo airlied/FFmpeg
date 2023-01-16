@@ -76,6 +76,7 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
 
     *vkav1_ref = (VkVideoDecodeAV1DpbSlotInfoMESA) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_DPB_SLOT_INFO_MESA,
+	.unique_idx = hp->unique_idx,
         .pStdReferenceInfo = av1_ref,
     };
 
@@ -90,7 +91,7 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
     *ref_slot = (VkVideoReferenceSlotInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
         .pNext = vkav1_ref,
-        .slotIndex = hp->unique_idx,
+        .slotIndex = dpb_slot_index,
         .pPictureResource = ref,
     };
 
@@ -274,7 +275,7 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
 
     err = vk_av1_fill_pict(avctx, NULL, &vp->ref_slot, &vp->ref,
                            &ap->vkav1_ref, &ap->av1_ref,
-                           pic, 1, apply_grain, 0);
+                           pic, 1, apply_grain, 8);
     if (err < 0)
         return err;
 
