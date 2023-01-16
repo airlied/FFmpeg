@@ -60,8 +60,8 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
     AV1VulkanDecodePicture *hp = pic->hwaccel_picture_private;
     FFVulkanDecodePicture *vkpic = &hp->vp;
 
-    int err = ff_vk_decode_prepare_frame(ctx, pic->f, vkpic,
-                                         is_current, has_grain, dpb_slot_index);
+    int err = ff_vk_decode_prepare_frame(ctx, pic->f, vkpic, is_current,
+                                         has_grain || ctx->dedicated_dpb);
     if (err < 0)
         return err;
 
@@ -80,7 +80,7 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
         .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
         .codedOffset = (VkOffset2D){ 0, 0 },
         .codedExtent = (VkExtent2D){ pic->f->width, pic->f->height },
-        .baseArrayLayer = 0,
+        .baseArrayLayer = (has_grain && ctx->layered_dpb) ? dpb_slot_index : 0,
         .imageViewBinding = vkpic->img_view_ref,
     };
 
