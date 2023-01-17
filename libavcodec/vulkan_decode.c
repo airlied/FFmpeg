@@ -596,7 +596,7 @@ repeat:
         h265_profile->sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_H265_PROFILE_INFO_KHR;
         h265_profile->stdProfileIdc = cur_profile;
     } else if (avctx->codec_id == AV_CODEC_ID_AV1) {
-        base_profile = STD_VIDEO_AV1_PROFILE_MAIN;
+        base_profile = STD_VIDEO_AV1_MESA_PROFILE_MAIN;
         dec_caps->pNext = &av1_caps;
         usage->pNext = av1_profile;
         av1_profile->sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_PROFILE_INFO_MESA;
@@ -726,6 +726,11 @@ repeat:
         av_log(avctx, AV_LOG_ERROR, "Cannot initialize Vulkan decoding session, buggy driver: "
                "VK_VIDEO_DECODE_CAPABILITY_DPB_AND_OUTPUT_COINCIDE_BIT_KHR set "
                "but VK_VIDEO_CAPABILITY_SEPARATE_REFERENCE_IMAGES_BIT_KHR is unset!\n");
+        return AVERROR_EXTERNAL;
+    } else if (!(dec_caps->flags & VK_VIDEO_DECODE_CAPABILITY_DPB_AND_OUTPUT_DISTINCT_BIT_KHR) &&
+               avctx->codec_id == AV_CODEC_ID_AV1) {
+        av_log(avctx, AV_LOG_ERROR, "Cannot initialize Vulkan decoding session, buggy driver: "
+               "codec is AV1, but VK_VIDEO_DECODE_CAPABILITY_DPB_AND_OUTPUT_DISTINCT_BIT_KHR isn't set!\n");
         return AVERROR_EXTERNAL;
     }
 
@@ -1065,6 +1070,8 @@ int ff_vk_decode_init(AVCodecContext *avctx)
     ff_vk_decode_flush(avctx);
 
     av_log(avctx, AV_LOG_VERBOSE, "Vulkan decoder initialization sucessful\n");
+
+    ctx->frame_id = ATOMIC_VAR_INIT(1);
 
     return 0;
 

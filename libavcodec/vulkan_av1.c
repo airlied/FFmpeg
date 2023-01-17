@@ -32,30 +32,30 @@ typedef struct AV1VulkanDecodePicture {
     FFVulkanDecodeContext          *ctx;
     FFVulkanDecodePicture           vp;
 
-    StdVideoDecodeAV1Tile          tiles[MAX_TILES];
-    StdVideoDecodeAV1TileList      tile_list;
+    StdVideoDecodeAV1MESATile      tiles[MAX_TILES];
+    StdVideoDecodeAV1MESATileList  tile_list;
     const uint32_t                *tile_offsets;
 
     /* Current picture */
-    StdVideoDecodeAV1ReferenceInfo  av1_ref;
-    VkVideoDecodeAV1DpbSlotInfoMESA vkav1_ref;
-    StdVideoAV1FrameHeader          av1_frame_header;
-    VkVideoDecodeAV1PictureInfoMESA av1_pic_info;
+    StdVideoDecodeAV1MESAReferenceInfo av1_ref;
+    VkVideoDecodeAV1DpbSlotInfoMESA    vkav1_ref;
+    StdVideoAV1MESAFrameHeader         av1_frame_header;
+    VkVideoDecodeAV1PictureInfoMESA    av1_pic_info;
 
     /* Picture refs */
-    const AV1Frame                 *ref_src   [AV1_NUM_REF_FRAMES];
-    StdVideoDecodeAV1ReferenceInfo  av1_refs  [AV1_NUM_REF_FRAMES];
-    VkVideoDecodeAV1DpbSlotInfoMESA vkav1_refs[AV1_NUM_REF_FRAMES];
+    const AV1Frame                     *ref_src   [AV1_NUM_REF_FRAMES];
+    StdVideoDecodeAV1MESAReferenceInfo  av1_refs  [AV1_NUM_REF_FRAMES];
+    VkVideoDecodeAV1DpbSlotInfoMESA     vkav1_refs[AV1_NUM_REF_FRAMES];
 
-    uint8_t unique_idx_set;
-    uint32_t unique_idx;
+    uint8_t frame_id_set;
+    uint8_t frame_id;
 } AV1VulkanDecodePicture;
 
 static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
                             VkVideoReferenceSlotInfoKHR *ref_slot,      /* Main structure */
                             VkVideoPictureResourceInfoKHR *ref,         /* Goes in ^ */
                             VkVideoDecodeAV1DpbSlotInfoMESA *vkav1_ref, /* Goes in ^ */
-                            StdVideoDecodeAV1ReferenceInfo *av1_ref,    /* Goes in ^ */
+                            StdVideoDecodeAV1MESAReferenceInfo *av1_ref,    /* Goes in ^ */
                             const AV1Frame *pic, int is_current, int has_grain,
                             int dpb_slot_index)
 {
@@ -68,15 +68,21 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
     if (err < 0)
         return err;
 
-    *av1_ref = (StdVideoDecodeAV1ReferenceInfo) {
+    *av1_ref = (StdVideoDecodeAV1MESAReferenceInfo) {
         .temporal_id = pic->temporal_id,
         .spatial_id = pic->spatial_id,
         .display_frame_id = pic->raw_frame_header->display_frame_id,
     };
 
+    if (!hp->frame_id_set) {
+        hp->frame_id = (atomic_fetch_add_explicit(&hp->frame_id, 1,
+                                                  memory_order_relaxed)) & 0xff;
+        hp->frame_id_set = 1;
+    }
+
     *vkav1_ref = (VkVideoDecodeAV1DpbSlotInfoMESA) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_DPB_SLOT_INFO_MESA,
-	.unique_idx = hp->unique_idx,
+        .frameIdx = hp->frame_id,
         .pStdReferenceInfo = av1_ref,
     };
 
@@ -112,7 +118,7 @@ static int vk_av1_create_params(AVCodecContext *avctx, AVBufferRef **buf)
 
     const AV1RawSequenceHeader *seq = s->raw_seq;
 
-    StdVideoAV1SequenceHeader av1_sequence_header;
+    StdVideoAV1MESASequenceHeader av1_sequence_header;
     VkVideoDecodeAV1SessionParametersAddInfoMESA av1_params_info;
     VkVideoDecodeAV1SessionParametersCreateInfoMESA av1_params;
     VkVideoSessionParametersCreateInfoKHR session_params_create;
@@ -122,8 +128,8 @@ static int vk_av1_create_params(AVCodecContext *avctx, AVBufferRef **buf)
     if (!par)
         return AVERROR(ENOMEM);
 
-    av1_sequence_header = (StdVideoAV1SequenceHeader) {
-        .flags = (StdVideoAV1SequenceHeaderFlags) {
+    av1_sequence_header = (StdVideoAV1MESASequenceHeader) {
+        .flags = (StdVideoAV1MESASequenceHeaderFlags) {
             .still_picture = seq->still_picture,
             .reduced_still_picture_header = seq->reduced_still_picture_header,
             .use_128x128_superblock = seq->use_128x128_superblock,
@@ -154,22 +160,22 @@ static int vk_av1_create_params(AVCodecContext *avctx, AVBufferRef **buf)
         .delta_frame_id_length_minus_2 = seq->delta_frame_id_length_minus_2,
         .additional_frame_id_length_minus_1 = seq->additional_frame_id_length_minus_1,
         .order_hint_bits_minus_1 = seq->order_hint_bits_minus_1,
-        .timing_info = (StdVideoAV1TimingInfo) {
-            .flags = (StdVideoAV1TimingInfoFlags) {
+        .timing_info = (StdVideoAV1MESATimingInfo) {
+            .flags = (StdVideoAV1MESATimingInfoFlags) {
                 .equal_picture_interval = seq->timing_info.equal_picture_interval,
             },
             .num_units_in_display_tick = seq->timing_info.num_units_in_display_tick,
             .time_scale = seq->timing_info.time_scale,
             .num_ticks_per_picture_minus_1 = seq->timing_info.num_ticks_per_picture_minus_1,
         },
-        .decoder_model_info = (StdVideoAV1DecoderModelInfo) {
+        .decoder_model_info = (StdVideoAV1MESADecoderModelInfo) {
             .buffer_delay_length_minus_1 = seq->decoder_model_info.buffer_delay_length_minus_1,
             .num_units_in_decoding_tick = seq->decoder_model_info.num_units_in_decoding_tick,
             .buffer_removal_time_length_minus_1 = seq->decoder_model_info.buffer_removal_time_length_minus_1,
             .frame_presentation_time_length_minus_1 = seq->decoder_model_info.frame_presentation_time_length_minus_1,
         },
-        .color_config = (StdVideoAV1ColorConfig) {
-            .flags = (StdVideoAV1ColorConfigFlags) {
+        .color_config = (StdVideoAV1MESAColorConfig) {
+            .flags = (StdVideoAV1MESAColorConfigFlags) {
                 .high_bitdepth = seq->color_config.high_bitdepth,
                 .twelve_bit = seq->color_config.twelve_bit,
                 .mono_chrome = seq->color_config.mono_chrome,
@@ -187,7 +193,7 @@ static int vk_av1_create_params(AVCodecContext *avctx, AVBufferRef **buf)
     };
 
     for (int i = 0; i <= seq->operating_points_cnt_minus_1; i++) {
-        av1_sequence_header.operating_points[i] = (StdVideoAV1OperatingPoint) {
+        av1_sequence_header.operating_points[i] = (StdVideoAV1MESAOperatingPoint) {
             .operating_point_idc = seq->operating_point_idc[i],
             .seq_level_idx = seq->seq_level_idx[i],
             .seq_tier = seq->seq_tier[i],
@@ -265,22 +271,6 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
     if (!vp->session_params)
         return AVERROR(ENOMEM);
 
-    if (!ap->unique_idx_set) {
-      unsigned slot_idx = 0;
-      for (unsigned i = 0; i < 32; i++) {
-	if (s->unique_slot_ids_mask & (1 << i))
-	  continue;
-	slot_idx = i;
-	break;
-      }
-      ap->unique_idx = slot_idx;
-      s->unique_slot_ids_mask |= (1 << slot_idx);
-      ap->unique_idx_set = 1;
-      fprintf(stderr, "allocated slot %p %d\n", ap, slot_idx);
-    }
-
-    fprintf(stderr, "frame header %d %d\n", frame_header->frame_type,
-	    frame_header->show_frame);
     /* Fill in references */
     for (int i = 0; i < AV1_NUM_REF_FRAMES; i++) {
         const AV1Frame *ref_frame = &s->ref[i];
@@ -328,8 +318,8 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
     };
 
     /* Setup frame header */
-    ap->av1_frame_header = (StdVideoAV1FrameHeader) {
-        .flags = (StdVideoAV1FrameHeaderFlags) {
+    ap->av1_frame_header = (StdVideoAV1MESAFrameHeader) {
+        .flags = (StdVideoAV1MESAFrameHeaderFlags) {
             .show_existing_frame = frame_header->show_existing_frame,
             .show_frame = frame_header->show_frame,
             .showable_frame = frame_header->showable_frame,
@@ -372,8 +362,8 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
         .golden_frame_idx = frame_header->golden_frame_idx,
         .interpolation_filter = frame_header->interpolation_filter,
         .tx_mode = frame_header->tx_mode,
-        .tiling = (StdVideoAV1Tiling) {
-            .flags = (StdVideoAV1TilingFlags) {
+        .tiling = (StdVideoAV1MESATiling) {
+            .flags = (StdVideoAV1MESATilingFlags) {
                 .uniform_tile_spacing_flag = frame_header->uniform_tile_spacing_flag,
             },
             .tile_cols = frame_header->tile_cols,
@@ -381,7 +371,7 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
             .context_update_tile_id = frame_header->context_update_tile_id,
             .tile_size_bytes_minus1 = frame_header->tile_size_bytes_minus1,
         },
-        .quantization = (StdVideoAV1Quantization) {
+        .quantization = (StdVideoAV1MESAQuantization) {
             .base_q_idx = frame_header->base_q_idx,
             .delta_q_y_dc = frame_header->delta_q_y_dc,
             .diff_uv_delta = frame_header->diff_uv_delta,
@@ -393,16 +383,16 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
             .qm_u = frame_header->qm_u,
             .qm_v = frame_header->qm_v,
         },
-        .delta_q = (StdVideoAV1DeltaQ) {
-            .flags = (StdVideoAV1DeltaQFlags) {
+        .delta_q = (StdVideoAV1MESADeltaQ) {
+            .flags = (StdVideoAV1MESADeltaQFlags) {
                 .delta_lf_present = frame_header->delta_lf_present,
                 .delta_lf_multi = frame_header->delta_lf_multi,
             },
             .delta_q_res = frame_header->delta_q_res,
             .delta_lf_res = frame_header->delta_lf_res,
         },
-        .loop_filter = (StdVideoAV1LoopFilter) {
-            .flags = (StdVideoAV1LoopFilterFlags) {
+        .loop_filter = (StdVideoAV1MESALoopFilter) {
+            .flags = (StdVideoAV1MESALoopFilterFlags) {
                 .loop_filter_delta_enabled = frame_header->loop_filter_delta_enabled,
                 .loop_filter_delta_update = frame_header->loop_filter_delta_update,
             },
@@ -418,25 +408,25 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
                 frame_header->loop_filter_mode_deltas[0], frame_header->loop_filter_mode_deltas[1],
             },
         },
-        .cdef = (StdVideoAV1CDEF) {
+        .cdef = (StdVideoAV1MESACDEF) {
             .cdef_damping_minus_3 = frame_header->cdef_damping_minus_3,
             .cdef_bits = frame_header->cdef_bits,
         },
-        .lr = (StdVideoAV1LoopRestoration) {
+        .lr = (StdVideoAV1MESALoopRestoration) {
             .lr_unit_shift = frame_header->lr_unit_shift,
             .lr_uv_shift = frame_header->lr_uv_shift,
             .lr_type = { frame_header->lr_type[0], frame_header->lr_type[1], frame_header->lr_type[2] },
         },
-        .segmentation = (StdVideoAV1Segmentation) {
-            .flags = (StdVideoAV1SegmentationFlags) {
+        .segmentation = (StdVideoAV1MESASegmentation) {
+            .flags = (StdVideoAV1MESASegmentationFlags) {
                 .segmentation_enabled = frame_header->segmentation_enabled,
                 .segmentation_update_map = frame_header->segmentation_update_map,
                 .segmentation_temporal_update = frame_header->segmentation_temporal_update,
                 .segmentation_update_data = frame_header->segmentation_update_data,
             },
         },
-        .film_grain = (StdVideoAV1FilmGrainParameters) {
-            .flags = (StdVideoAV1FilmGrainFlags) {
+        .film_grain = (StdVideoAV1MESAFilmGrainParameters) {
+            .flags = (StdVideoAV1MESAFilmGrainFlags) {
                 .apply_grain = apply_grain,
                 .chroma_scaling_from_luma = film_grain->chroma_scaling_from_luma,
                 .overlap_flag = film_grain->overlap_flag,
@@ -482,8 +472,8 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
         ap->av1_frame_header.cdef.cdef_uv_sec_strength[i] = frame_header->cdef_uv_sec_strength[i];
 
         ap->av1_frame_header.ref_order_hint[i] = frame_header->ref_order_hint[i];
-        ap->av1_frame_header.warped_motion[i] = (StdVideoAV1WarpedMotion) {
-            .flags = (StdVideoAV1WarpedMotionFlags) {
+        ap->av1_frame_header.warped_motion[i] = (StdVideoAV1MESAWarpedMotion) {
+            .flags = (StdVideoAV1MESAWarpedMotionFlags) {
                 .is_global = frame_header->is_global[i],
                 .is_rot_zoom = frame_header->is_rot_zoom[i],
                 .is_translation = frame_header->is_translation[i],
@@ -542,7 +532,7 @@ static int vk_av1_decode_slice(AVCodecContext *avctx,
     FFVulkanDecodePicture *vp = &ap->vp;
 
     for (int i = s->tg_start; i <= s->tg_end; i++) {
-        ap->tiles[ap->tile_list.nb_tiles] = (StdVideoDecodeAV1Tile) {
+        ap->tiles[ap->tile_list.nb_tiles] = (StdVideoDecodeAV1MESATile) {
             .size     = s->tile_group_info[i].tile_size,
             .offset   = s->tile_group_info[i].tile_offset,
             .row      = s->tile_group_info[i].tile_row,
@@ -589,12 +579,6 @@ static int vk_av1_end_frame(AVCodecContext *avctx)
 static void vk_av1_free_frame_priv(AVCodecContext *avctx, void *data)
 {
     AV1VulkanDecodePicture *ap = data;
-    AV1DecContext *s = avctx->priv_data;
-
-    if (ap->unique_idx_set) {
-      s->unique_slot_ids_mask &= ~(1 << ap->unique_idx);
-      fprintf(stderr, "deallocated %p %d\n", ap, ap->unique_idx);
-    }
 
     /* Free frame resources, this also destroys the session parameters. */
     ff_vk_decode_free_frame(ap->ctx, &ap->vp);

@@ -52,7 +52,7 @@ typedef struct FFVulkanDecodeContext {
     enum AVPixelFormat sw_format;
     int init;
 
-    AVBufferRef *session_params;
+    atomic_uint_least64_t frame_id; /* For AV1 only */
 
     FFVkQueueFamilyCtx qf_dec;
     FFVkExecPool exec_pool;
