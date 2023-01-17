@@ -557,7 +557,7 @@ static int vk_av1_decode_slice(AVCodecContext *avctx,
         if (err < 0)
             return err;
 
-        ap->tiles[ap->tile_list.nb_tiles - 1].offset = ap->tile_offsets[ap->tile_list.nb_tiles - 1];
+//        ap->tiles[ap->tile_list.nb_tiles - 1].offset = ap->tile_offsets[ap->tile_list.nb_tiles - 1];
     }
 
     return 0;
