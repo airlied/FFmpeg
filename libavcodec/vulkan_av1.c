@@ -84,7 +84,8 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
         .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
         .codedOffset = (VkOffset2D){ 0, 0 },
         .codedExtent = (VkExtent2D){ pic->f->width, pic->f->height },
-        .baseArrayLayer = (has_grain && ctx->layered_dpb) ? dpb_slot_index : 0,
+        .baseArrayLayer = ((has_grain || ctx->dedicated_dpb) && ctx->layered_dpb) ?
+                          dpb_slot_index : 0,
         .imageViewBinding = vkpic->img_view_ref,
     };
 
@@ -101,8 +102,7 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
     return 0;
 }
 
-static int vk_av1_create_params(AVCodecContext *avctx,
-                                VkVideoSessionParametersKHR *par)
+static int vk_av1_create_params(AVCodecContext *avctx, AVBufferRef **buf)
 {
     VkResult ret;
 
@@ -112,11 +112,17 @@ static int vk_av1_create_params(AVCodecContext *avctx,
 
     const AV1RawSequenceHeader *seq = s->raw_seq;
 
+    StdVideoAV1SequenceHeader av1_sequence_header;
     VkVideoDecodeAV1SessionParametersAddInfoMESA av1_params_info;
     VkVideoDecodeAV1SessionParametersCreateInfoMESA av1_params;
     VkVideoSessionParametersCreateInfoKHR session_params_create;
 
-    StdVideoAV1SequenceHeader av1_sequence_header = {
+    AVBufferRef *tmp;
+    VkVideoSessionParametersKHR *par = av_malloc(sizeof(*par));
+    if (!par)
+        return AVERROR(ENOMEM);
+
+    av1_sequence_header = (StdVideoAV1SequenceHeader) {
         .flags = (StdVideoAV1SequenceHeaderFlags) {
             .still_picture = seq->still_picture,
             .reduced_still_picture_header = seq->reduced_still_picture_header,
@@ -218,6 +224,17 @@ static int vk_av1_create_params(AVCodecContext *avctx,
         return AVERROR_EXTERNAL;
     }
 
+    tmp = av_buffer_create((uint8_t *)par, sizeof(*par), ff_vk_decode_free_params,
+                           ctx, 0);
+    if (!tmp) {
+        ff_vk_decode_free_params(ctx, (uint8_t *)par);
+        return AVERROR(ENOMEM);
+    }
+
+    av_log(avctx, AV_LOG_DEBUG, "Created frame parameters\n");
+
+    *buf = tmp;
+
     return 0;
 }
 
@@ -238,6 +255,16 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
     const int apply_grain = !(avctx->export_side_data & AV_CODEC_EXPORT_DATA_FILM_GRAIN) &&
                             film_grain->apply_grain;
 
+    if (!s->hwaccel_params_buf) {
+        err = vk_av1_create_params(avctx, &s->hwaccel_params_buf);
+        if (err < 0)
+            return err;
+    }
+
+    vp->session_params = av_buffer_ref(s->hwaccel_params_buf);
+    if (!vp->session_params)
+        return AVERROR(ENOMEM);
+
     if (!ap->unique_idx_set) {
       unsigned slot_idx = 0;
       for (unsigned i = 0; i < 32; i++) {
@@ -251,10 +278,6 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
       ap->unique_idx_set = 1;
       fprintf(stderr, "allocated slot %p %d\n", ap, slot_idx);
     }
-
-    err = vk_av1_create_params(avctx, &vp->session_params);
-    if (err < 0)
-        return err;
 
     fprintf(stderr, "frame header %d %d\n", frame_header->frame_type,
 	    frame_header->show_frame);
