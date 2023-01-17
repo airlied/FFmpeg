@@ -353,7 +353,8 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
         return err;
 
     err = ff_vk_exec_add_dep_frame(&ctx->s, exec, pic,
-                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                                   VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                   VK_PIPELINE_STAGE_2_VIDEO_DECODE_BIT_KHR);
     if (err < 0)
         return err;
 
@@ -367,12 +368,12 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
         .pNext = NULL,
         .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_VIDEO_DECODE_BIT_KHR,
         .srcAccessMask = vkf->access[0],
+        .dstStageMask = VK_PIPELINE_STAGE_2_VIDEO_DECODE_BIT_KHR,
         .dstAccessMask = VK_ACCESS_2_VIDEO_DECODE_WRITE_BIT_KHR,
         .oldLayout = vkf->layout[0],
         .newLayout = vp->dpb_frame ? VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR :
-                     VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR, /* Spec, 07252 utter madness */
+                                     VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR, /* Spec, 07252 utter madness */
         .srcQueueFamilyIndex = vkf->queue_family[0],
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image = vkf->img[0],
@@ -388,7 +389,8 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
     /* Reference for the current image, if existing and not layered */
     if (vp->dpb_frame) {
         err = ff_vk_exec_add_dep_frame(&ctx->s, exec, vp->dpb_frame,
-                                       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                                       VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                       VK_PIPELINE_STAGE_2_VIDEO_DECODE_BIT_KHR);
         if (err < 0)
             return err;
     }
@@ -402,7 +404,8 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
             AVFrame *ref = rvp->dpb_frame ? rvp->dpb_frame : ref_frame;
 
             err = ff_vk_exec_add_dep_frame(&ctx->s, exec, ref,
-                                           VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                                           VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                           VK_PIPELINE_STAGE_2_VIDEO_DECODE_BIT_KHR);
             if (err < 0)
                 return err;
 
@@ -420,7 +423,7 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
                 img_bar[nb_img_bar] = (VkImageMemoryBarrier2) {
                     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                     .pNext = NULL,
-                    .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
                     .srcAccessMask = rvkf->access[0],
                     .dstStageMask = VK_PIPELINE_STAGE_2_VIDEO_DECODE_BIT_KHR,
                     .dstAccessMask = VK_ACCESS_2_VIDEO_DECODE_READ_BIT_KHR |
@@ -444,7 +447,8 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
                vp->img_view_out != vp->img_view_ref) {
         /* Single barrier for a single layered ref */
         err = ff_vk_exec_add_dep_frame(&ctx->s, exec, ctx->layered_frame,
-                                       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                                       VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                       VK_PIPELINE_STAGE_2_VIDEO_DECODE_BIT_KHR);
         if (err < 0)
             return err;
     }
@@ -452,7 +456,6 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
     /* Change image layout */
     vk->CmdPipelineBarrier2(cmd_buf, &(VkDependencyInfo) {
             .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
             .pImageMemoryBarriers = img_bar,
             .imageMemoryBarrierCount = nb_img_bar,
         });
