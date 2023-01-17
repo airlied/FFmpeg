@@ -1071,8 +1071,6 @@ int ff_vk_decode_init(AVCodecContext *avctx)
 
     av_log(avctx, AV_LOG_VERBOSE, "Vulkan decoder initialization sucessful\n");
 
-    ctx->frame_id = ATOMIC_VAR_INIT(1);
-
     return 0;
 
 fail:

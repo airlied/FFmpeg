@@ -74,12 +74,6 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
         .display_frame_id = pic->raw_frame_header->display_frame_id,
     };
 
-    if (!hp->frame_id_set) {
-        hp->frame_id = (atomic_fetch_add_explicit(&hp->frame_id, 1,
-                                                  memory_order_relaxed)) & 0xff;
-        hp->frame_id_set = 1;
-    }
-
     *vkav1_ref = (VkVideoDecodeAV1DpbSlotInfoMESA) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_DPB_SLOT_INFO_MESA,
         .frameIdx = hp->frame_id,
@@ -270,6 +264,19 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
     vp->session_params = av_buffer_ref(s->hwaccel_params_buf);
     if (!vp->session_params)
         return AVERROR(ENOMEM);
+
+    if (!ap->frame_id_set) {
+        unsigned slot_idx = 0;
+        for (unsigned i = 0; i < 32; i++) {
+            if (!(ctx->frame_id_alloc_mask & (1 << i))) {
+                slot_idx = i;
+                break;
+            }
+        }
+        ap->frame_id = slot_idx;
+        ap->frame_id_set = 1;
+        ctx->frame_id_alloc_mask |= (1 << slot_idx);
+    }
 
     /* Fill in references */
     for (int i = 0; i < AV1_NUM_REF_FRAMES; i++) {
@@ -579,6 +586,11 @@ static int vk_av1_end_frame(AVCodecContext *avctx)
 static void vk_av1_free_frame_priv(AVCodecContext *avctx, void *data)
 {
     AV1VulkanDecodePicture *ap = data;
+    AV1DecContext *s = avctx->priv_data;
+    FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
+
+    if (ap->frame_id_set)
+        ctx->frame_id_alloc_mask &= ~(1 << ap->frame_id);
 
     /* Free frame resources, this also destroys the session parameters. */
     ff_vk_decode_free_frame(ap->ctx, &ap->vp);
