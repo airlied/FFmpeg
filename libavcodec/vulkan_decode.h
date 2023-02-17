@@ -40,6 +40,7 @@ typedef struct FFVulkanDecodeContext {
 
     VkVideoDecodeH264ProfileInfoKHR h264_profile;
     VkVideoDecodeH264ProfileInfoKHR h265_profile;
+    VkVideoDecodeAV1ProfileInfoMESA av1_profile;
     VkVideoSessionParametersKHR empty_session_params;
 
     VkSamplerYcbcrConversion yuv_sampler;
@@ -51,7 +52,7 @@ typedef struct FFVulkanDecodeContext {
     enum AVPixelFormat sw_format;
     int init;
 
-    AVBufferRef *session_params;
+    uint32_t frame_id_alloc_mask; /* For AV1 only */
 
     FFVkQueueFamilyCtx qf_dec;
     FFVkExecPool exec_pool;
