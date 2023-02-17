@@ -1195,6 +1195,7 @@ static int vulkan_device_create_internal(AVHWDeviceContext *ctx,
     p->device_features_1_2.bufferDeviceAddress = dev_features_1_2.bufferDeviceAddress;
     p->device_features_1_1.samplerYcbcrConversion = dev_features_1_1.samplerYcbcrConversion;
     p->device_features_1_3.synchronization2 = dev_features_1_3.synchronization2;
+    p->device_features_1_3.computeFullSubgroups = dev_features_1_3.computeFullSubgroups;
     p->desc_buf_features.descriptorBuffer = desc_buf_features.descriptorBuffer;
     p->desc_buf_features.descriptorBufferPushDescriptors = desc_buf_features.descriptorBufferPushDescriptors;
 
