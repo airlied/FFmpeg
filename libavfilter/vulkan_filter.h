@@ -1,4 +1,6 @@
 /*
+ * Copyright (c) Lynne
+ *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -30,5 +32,28 @@ int  ff_vk_filter_init                 (AVFilterContext *avctx);
 int  ff_vk_filter_config_input         (AVFilterLink   *inlink);
 int  ff_vk_filter_config_output        (AVFilterLink  *outlink);
 int  ff_vk_filter_config_output_inplace(AVFilterLink  *outlink);
+
+/**
+ * Submit a compute shader with a single in and single out for execution.
+ */
+int ff_vk_filter_process_simple(FFVulkanContext *vkctx, FFVkExecPool *e,
+                                FFVulkanPipeline *pl, AVFrame *out_f, AVFrame *in_f,
+                                VkSampler sampler, void *push_src, size_t push_size);
+
+/**
+ * Submit a compute shader with a single in and single out with 2 stages.
+ */
+int ff_vk_filter_process_2pass(FFVulkanContext *vkctx, FFVkExecPool *e,
+                               FFVulkanPipeline *pls[2],
+                               AVFrame *out, AVFrame *tmp, AVFrame *in,
+                               VkSampler sampler, void *push_src, size_t push_size);
+
+/**
+ * Two inputs, one output
+ */
+int ff_vk_filter_process_2in(FFVulkanContext *vkctx, FFVkExecPool *e,
+                             FFVulkanPipeline *pl,
+                             AVFrame *out, AVFrame *in1, AVFrame *in2,
+                             VkSampler sampler, void *push_src, size_t push_size);
 
 #endif /* AVFILTER_VULKAN_FILTER_H */
