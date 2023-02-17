@@ -31,6 +31,7 @@ typedef struct FFVulkanDecodeContext {
 
     int dedicated_dpb; /* Oddity  #1 - separate DPB images */
     int layered_dpb;   /* Madness #1 - layered  DPB images */
+    int external_fg;   /* Oddity  #2 - hardware can't apply film grain */
 
     AVBufferRef *dpb_hwfc_ref;  /* Only used for dedicated_dpb */
 
@@ -40,6 +41,7 @@ typedef struct FFVulkanDecodeContext {
 
     VkVideoDecodeH264ProfileInfoKHR h264_profile;
     VkVideoDecodeH264ProfileInfoKHR h265_profile;
+    VkVideoDecodeAV1ProfileInfoMESA av1_profile;
     VkVideoSessionParametersKHR empty_session_params;
 
     VkSamplerYcbcrConversion yuv_sampler;
@@ -49,7 +51,7 @@ typedef struct FFVulkanDecodeContext {
     VkVideoProfileListInfoKHR profile_list;
     int init;
 
-    AVBufferRef *session_params;
+    uint32_t frame_id_alloc_mask; /* For AV1 only */
 
     FFVkQueueFamilyCtx qf_dec;
     FFVkExecPool exec_pool;
