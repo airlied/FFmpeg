@@ -346,12 +346,14 @@ typedef struct VkVideoDecodeAV1PictureInfoMESA {
     const void *pNext;
     StdVideoAV1MESAFrameHeader *frame_header;
     StdVideoDecodeAV1MESATileList *tile_list;
+    uint8_t skip_mode_frame_idx[2];
 } VkVideoDecodeAV1PictureInfoMESA;
 
 typedef struct VkVideoDecodeAV1DpbSlotInfoMESA {
     VkStructureType sType;
     const void *pNext;
     uint8_t frameIdx;
+    uint8_t ref_order_hints[7];
 } VkVideoDecodeAV1DpbSlotInfoMESA;
 
 typedef struct VkVideoDecodeAV1SessionParametersAddInfoMESA {

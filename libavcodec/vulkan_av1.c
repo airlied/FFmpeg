@@ -70,6 +70,9 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
         .frameIdx = hp->frame_id,
     };
 
+    for (unsigned i = 0; i < 7; i++)
+        vkav1_ref->ref_order_hints[i] = pic->ref_order_hint[i];
+
     *ref = (VkVideoPictureResourceInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
         .codedOffset = (VkOffset2D){ 0, 0 },
@@ -450,6 +453,9 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
         ap->av1_frame_header.ref_frame_idx[i] = frame_header->ref_frame_idx[i];
         ap->av1_frame_header.delta_frame_id_minus1[i] = frame_header->delta_frame_id_minus1[i];
     }
+
+    ap->av1_pic_info.skip_mode_frame_idx[0] = s->cur_frame.skip_mode_frame_idx[0];
+    ap->av1_pic_info.skip_mode_frame_idx[1] = s->cur_frame.skip_mode_frame_idx[1];
 
     if (apply_grain) {
         for (int i = 0; i < 14; i++) {

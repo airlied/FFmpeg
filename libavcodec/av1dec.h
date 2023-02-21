@@ -47,6 +47,7 @@ typedef struct AV1Frame {
     int32_t gm_params[AV1_NUM_REF_FRAMES][6];
 
     uint8_t skip_mode_frame_idx[2];
+    uint8_t ref_order_hint[7];
 
     AV1RawFilmGrainParams film_grain;
 
