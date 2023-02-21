@@ -330,6 +330,7 @@ typedef struct StdVideoAV1MESASequenceHeader {
 typedef struct StdVideoDecodeAV1MESATile {
     uint16_t tg_start;
     uint16_t tg_end;
+    uint16_t tile_idx;
     uint16_t row;
     uint16_t column;
     int size;
@@ -380,9 +381,16 @@ typedef struct VkVideoDecodeAV1ProfileInfoMESA {
     StdVideoAV1MESAProfile stdProfileIdc;
 } VkVideoDecodeAV1ProfileInfoMESA;
 
+/* for Intel HW */
+typedef enum VkVideoDecodeAV1CapabilityFlagsMESA {
+    VK_VIDEO_DECODE_AV1_CAPABILITY_FLAG_SINGLE_TILE_PER_CMD_BUFFER_MESA = 0x00000001,
+} VkVideoDecodeCapabiltiyFlagBitsMESA;
+typedef VkFlags VkVideoDecodeAV1CapabilityFlagsMESA;
+
 typedef struct VkVideoDecodeAV1CapabilitiesMESA {
     VkStructureType sType;
     const void *pNext;
+    VkVideoDecodeAV1CapabilityFlagsMESA flags;
     StdVideoAV1MESALevel maxLevelIdc;
 } VkVideoDecodeAV1CapabilitiesMESA;
 

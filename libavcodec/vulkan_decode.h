@@ -31,6 +31,7 @@ typedef struct FFVulkanDecodeContext {
 
     int dedicated_dpb; /* Oddity  #1 - separate DPB images */
     int layered_dpb;   /* Madness #1 - layered  DPB images */
+    int av1_single_tile_buffer;
 
     AVBufferRef *dpb_hwfc_ref;  /* Only used for dedicated_dpb */
 

@@ -487,6 +487,7 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
     return 0;
 }
 
+static int vk_av1_end_frame(AVCodecContext *avctx);
 static int vk_av1_decode_slice(AVCodecContext *avctx,
                                const uint8_t  *data,
                                uint32_t        size)
@@ -495,11 +496,43 @@ static int vk_av1_decode_slice(AVCodecContext *avctx,
     const AV1DecContext *s = avctx->priv_data;
     AV1VulkanDecodePicture *ap = s->cur_frame.hwaccel_picture_private;
     FFVulkanDecodePicture *vp = &ap->vp;
+    FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
+    if (ctx->av1_single_tile_buffer) {
+
+      for (int i = s->tg_start; i <= s->tg_end; i++) {
+          ap->tiles[ap->tile_list.nb_tiles] = (StdVideoDecodeAV1MESATile) {
+              .size     = s->tile_group_info[i].tile_size,
+              .offset   = s->tile_group_info[i].tile_offset,
+              .tile_idx = i,
+              .row      = s->tile_group_info[i].tile_row,
+              .column   = s->tile_group_info[i].tile_column,
+              .tg_start = s->tg_start,
+              .tg_end   = s->tg_end,
+          };
+
+          err = ff_vk_decode_add_slice(vp, data, size, 0,
+                                       &ap->tile_list.nb_tiles,
+                                       &ap->tile_offsets);
+          if (err < 0)
+              return err;
+
+          vk_av1_end_frame(avctx);
+
+          vp->session_params = av_buffer_ref(s->hwaccel_params_buf);
+          if (!vp->session_params)
+              return AVERROR(ENOMEM);
+          /* have to do a full frame submit per tile */
+          ap->tile_list.nb_tiles = 0;
+          ap->tile_list.tile_list = ap->tiles;
+      }
+      return 0;
+    }
 
     for (int i = s->tg_start; i <= s->tg_end; i++) {
         ap->tiles[ap->tile_list.nb_tiles] = (StdVideoDecodeAV1MESATile) {
             .size     = s->tile_group_info[i].tile_size,
             .offset   = s->tile_group_info[i].tile_offset,
+            .tile_idx = i,
             .row      = s->tile_group_info[i].tile_row,
             .column   = s->tile_group_info[i].tile_column,
             .tg_start = s->tg_start,
@@ -527,6 +560,8 @@ static int vk_av1_end_frame(AVCodecContext *avctx)
     FFVulkanDecodePicture *rvp[AV1_NUM_REF_FRAMES] = { 0 };
     AVFrame *rav[AV1_NUM_REF_FRAMES] = { 0 };
 
+    if (ap->tile_list.nb_tiles == 0)
+        return 0;
     for (int i = 0; i < vp->decode_info.referenceSlotCount; i++) {
         const AV1Frame *rp = ap->ref_src[i];
         AV1VulkanDecodePicture *rhp = rp->hwaccel_picture_private;

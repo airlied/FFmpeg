@@ -782,6 +782,8 @@ repeat:
                    " protected" : "",
                caps->flags & VK_VIDEO_CAPABILITY_SEPARATE_REFERENCE_IMAGES_BIT_KHR ?
                    " separate_references" : "");
+	if (avctx->codec_id == AV_CODEC_ID_AV1)
+	  av_log(avctx, AV_LOG_VERBOSE, "    AV1 Flags:%s\n", av1_caps.flags & VK_VIDEO_DECODE_AV1_CAPABILITY_FLAG_SINGLE_TILE_PER_CMD_BUFFER_MESA ? " single tile per command" : "");
     }
 
     /* Check if decoding is possible with the given parameters */
@@ -867,6 +869,8 @@ repeat:
     if (ctx) {
         ctx->dedicated_dpb = dedicated_dpb;
         ctx->layered_dpb = layered_dpb;
+        if (avctx->codec_id == AV_CODEC_ID_AV1)
+            ctx->av1_single_tile_buffer = !!av1_caps.flags & VK_VIDEO_DECODE_AV1_CAPABILITY_FLAG_SINGLE_TILE_PER_CMD_BUFFER_MESA;
         ctx->init = 1;
     }
 
