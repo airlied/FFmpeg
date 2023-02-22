@@ -72,6 +72,7 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
 
     for (unsigned i = 0; i < 7; i++)
         vkav1_ref->ref_order_hints[i] = pic->ref_order_hint[i];
+    vkav1_ref->cdf_update_disabled = pic->raw_frame_header->disable_frame_end_update_cdf;
 
     *ref = (VkVideoPictureResourceInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
