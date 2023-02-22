@@ -589,6 +589,8 @@ static void av1_frame_unref(AVCodecContext *avctx, AV1Frame *f)
     f->spatial_id = f->temporal_id = 0;
     memset(f->skip_mode_frame_idx, 0,
            2 * sizeof(uint8_t));
+    memset(f->ref_order_hint, 0,
+           7 * sizeof(uint8_t));
     memset(&f->film_grain, 0, sizeof(f->film_grain));
     f->coded_lossless = 0;
 }
@@ -631,6 +633,9 @@ static int av1_frame_ref(AVCodecContext *avctx, AV1Frame *dst, const AV1Frame *s
     memcpy(dst->skip_mode_frame_idx,
            src->skip_mode_frame_idx,
            2 * sizeof(uint8_t));
+    memcpy(dst->ref_order_hint,
+           src->ref_order_hint,
+           7 * sizeof(uint8_t));
     memcpy(&dst->film_grain,
            &src->film_grain,
            sizeof(dst->film_grain));
@@ -1132,6 +1137,10 @@ static int av1_decode_frame(AVCodecContext *avctx, AVFrame *frame,
 
             s->cur_frame.spatial_id  = header->spatial_id;
             s->cur_frame.temporal_id = header->temporal_id;
+
+            for (int i = 0; i < 7; i++)
+                s->cur_frame.ref_order_hint[i] =
+                s->raw_frame_header->ref_order_hint[s->raw_frame_header->ref_frame_idx[i]];
 
             if (avctx->hwaccel && s->cur_frame.f->buf[0]) {
                 ret = avctx->hwaccel->start_frame(avctx, unit->data,
