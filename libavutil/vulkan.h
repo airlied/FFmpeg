@@ -355,14 +355,30 @@ int ff_vk_alloc_mem(FFVulkanContext *s, VkMemoryRequirements *req,
 int ff_vk_create_buf(FFVulkanContext *s, FFVkBuffer *buf, size_t size,
                      void *pNext, void *alloc_pNext,
                      VkBufferUsageFlags usage, VkMemoryPropertyFlagBits flags);
+int ff_vk_create_avbuf(FFVulkanContext *s, AVBufferRef **ref, size_t size,
+                       void *pNext, void *alloc_pNext,
+                       VkBufferUsageFlags usage, VkMemoryPropertyFlagBits flags);
 
 /**
  * Buffer management code.
  */
-int ff_vk_map_buffers(FFVulkanContext *s, FFVkBuffer *buf, uint8_t *mem[],
+int ff_vk_map_buffers(FFVulkanContext *s, FFVkBuffer **buf, uint8_t **mem[],
                       int nb_buffers, int invalidate);
-int ff_vk_unmap_buffers(FFVulkanContext *s, FFVkBuffer *buf, int nb_buffers,
+int ff_vk_unmap_buffers(FFVulkanContext *s, FFVkBuffer **buf, int nb_buffers,
                         int flush);
+
+static inline int ff_vk_map_buffer(FFVulkanContext *s, FFVkBuffer *buf, uint8_t **mem,
+                                   int invalidate)
+{
+    return ff_vk_map_buffers(s, (FFVkBuffer *[]){ buf }, (uint8_t **[]) { mem },
+                             1, invalidate);
+}
+
+static inline int ff_vk_unmap_buffer(FFVulkanContext *s, FFVkBuffer *buf, int flush)
+{
+    return ff_vk_unmap_buffers(s, (FFVkBuffer *[]){ buf }, 1, flush);
+}
+
 void ff_vk_free_buf(FFVulkanContext *s, FFVkBuffer *buf);
 
 /**

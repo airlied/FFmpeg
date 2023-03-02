@@ -886,7 +886,42 @@ int ff_vk_create_buf(FFVulkanContext *s, FFVkBuffer *buf, size_t size,
     return 0;
 }
 
-int ff_vk_map_buffers(FFVulkanContext *s, FFVkBuffer *buf, uint8_t *mem[],
+static void destroy_avvkbuf(void *opaque, uint8_t *data)
+{
+    FFVulkanContext *s = opaque;
+    FFVkBuffer *buf = (FFVkBuffer *)data;
+    ff_vk_free_buf(s, buf);
+    av_free(buf);
+}
+
+int ff_vk_create_avbuf(FFVulkanContext *s, AVBufferRef **ref, size_t size,
+                       void *pNext, void *alloc_pNext,
+                       VkBufferUsageFlags usage, VkMemoryPropertyFlagBits flags)
+{
+    int err;
+    AVBufferRef *buf;
+    FFVkBuffer *vkb = av_mallocz(sizeof(*vkb));
+    if (!vkb)
+        return AVERROR(ENOMEM);
+
+    err = ff_vk_create_buf(s, vkb, size, pNext, alloc_pNext, usage, flags);
+    if (err < 0) {
+        av_free(vkb);
+        return err;
+    }
+
+    buf = av_buffer_create((uint8_t *)vkb, sizeof(*vkb), destroy_avvkbuf, s, 0);
+    if (!buf) {
+        destroy_avvkbuf(s, (uint8_t *)vkb);
+        return AVERROR(ENOMEM);
+    }
+
+    *ref = buf;
+
+    return 0;
+}
+
+int ff_vk_map_buffers(FFVulkanContext *s, FFVkBuffer **buf, uint8_t **mem[],
                       int nb_buffers, int invalidate)
 {
     VkResult ret;
@@ -895,13 +930,15 @@ int ff_vk_map_buffers(FFVulkanContext *s, FFVkBuffer *buf, uint8_t *mem[],
     int inval_count = 0;
 
     for (int i = 0; i < nb_buffers; i++) {
-        ret = vk->MapMemory(s->hwctx->act_dev, buf[i].mem, 0,
-                            VK_WHOLE_SIZE, 0, (void **)&mem[i]);
+        void *dst;
+        ret = vk->MapMemory(s->hwctx->act_dev, buf[i]->mem, 0,
+                            VK_WHOLE_SIZE, 0, &dst);
         if (ret != VK_SUCCESS) {
             av_log(s, AV_LOG_ERROR, "Failed to map buffer memory: %s\n",
                    ff_vk_ret2str(ret));
             return AVERROR_EXTERNAL;
         }
+        *(mem[i]) = dst;
     }
 
     if (!invalidate)
@@ -910,10 +947,10 @@ int ff_vk_map_buffers(FFVulkanContext *s, FFVkBuffer *buf, uint8_t *mem[],
     for (int i = 0; i < nb_buffers; i++) {
         const VkMappedMemoryRange ival_buf = {
             .sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-            .memory = buf[i].mem,
+            .memory = buf[i]->mem,
             .size   = VK_WHOLE_SIZE,
         };
-        if (buf[i].flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+        if (buf[i]->flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
             continue;
         inval_list[inval_count++] = ival_buf;
     }
@@ -931,7 +968,7 @@ int ff_vk_map_buffers(FFVulkanContext *s, FFVkBuffer *buf, uint8_t *mem[],
     return 0;
 }
 
-int ff_vk_unmap_buffers(FFVulkanContext *s, FFVkBuffer *buf, int nb_buffers,
+int ff_vk_unmap_buffers(FFVulkanContext *s, FFVkBuffer **buf, int nb_buffers,
                         int flush)
 {
     int err = 0;
@@ -944,10 +981,10 @@ int ff_vk_unmap_buffers(FFVulkanContext *s, FFVkBuffer *buf, int nb_buffers,
         for (int i = 0; i < nb_buffers; i++) {
             const VkMappedMemoryRange flush_buf = {
                 .sType  = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                .memory = buf[i].mem,
+                .memory = buf[i]->mem,
                 .size   = VK_WHOLE_SIZE,
             };
-            if (buf[i].flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+            if (buf[i]->flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
                 continue;
             flush_list[flush_count++] = flush_buf;
         }
@@ -964,7 +1001,7 @@ int ff_vk_unmap_buffers(FFVulkanContext *s, FFVkBuffer *buf, int nb_buffers,
     }
 
     for (int i = 0; i < nb_buffers; i++)
-        vk->UnmapMemory(s->hwctx->act_dev, buf[i].mem);
+        vk->UnmapMemory(s->hwctx->act_dev, buf[i]->mem);
 
     return err;
 }
@@ -1429,7 +1466,7 @@ int ff_vk_exec_pipeline_register(FFVulkanContext *s, FFVkExecPool *pool,
         if (err < 0)
             return err;
 
-        err = ff_vk_map_buffers(s, &set->buf, &set->desc_mem, 1, 0);
+        err = ff_vk_map_buffer(s, &set->buf, &set->desc_mem, 0);
         if (err < 0)
             return err;
 
@@ -1705,7 +1742,7 @@ void ff_vk_pipeline_free(FFVulkanContext *s, FFVulkanPipeline *pl)
     for (int i = 0; i < pl->nb_descriptor_sets; i++) {
         FFVulkanDescriptorSet *set = &pl->desc_set[i];
         if (set->buf.mem)
-            ff_vk_unmap_buffers(s, &set->buf, 1, 0);
+            ff_vk_unmap_buffer(s, &set->buf, 0);
         ff_vk_free_buf(s, &set->buf);
         if (set->layout)
             vk->DestroyDescriptorSetLayout(s->hwctx->act_dev, set->layout,
