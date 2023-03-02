@@ -499,8 +499,8 @@ void ff_vk_exec_discard_deps(FFVulkanContext *s, FFVkExecContext *e)
     e->nb_buf_deps = 0;
 
     for (int j = 0; j < e->nb_frame_deps; j++) {
+        AVFrame *f = e->frame_deps[j];
         if (e->frame_locked[j]) {
-            AVFrame *f = e->frame_deps[j];
             AVHWFramesContext *hwfc = (AVHWFramesContext *)f->hw_frames_ctx->data;
             AVVulkanFramesContext *vkfc = hwfc->hwctx;
             AVVkFrame *vkf = (AVVkFrame *)f->data[0];
@@ -508,7 +508,8 @@ void ff_vk_exec_discard_deps(FFVulkanContext *s, FFVkExecContext *e)
             e->frame_locked[j] = 0;
             e->frame_update[j] = 0;
         }
-        av_frame_free(&e->frame_deps[j]);
+        if (f->buf[0])
+            av_frame_free(&e->frame_deps[j]);
     }
     e->nb_frame_deps = 0;
 
@@ -606,7 +607,7 @@ int ff_vk_exec_add_dep_frame(FFVulkanContext *s, FFVkExecContext *e, AVFrame *f,
     ARR_REALLOC(e, frame_update, &e->frame_update_alloc_size, e->nb_frame_deps);
     ARR_REALLOC(e, frame_deps,   &e->frame_deps_alloc_size,   e->nb_frame_deps);
 
-    e->frame_deps[e->nb_frame_deps] = av_frame_clone(f);
+    e->frame_deps[e->nb_frame_deps] = f->buf[0] ? av_frame_clone(f) : f;
     if (!e->frame_deps[e->nb_frame_deps]) {
         ff_vk_exec_discard_deps(s, e);
         return AVERROR(ENOMEM);
@@ -702,11 +703,9 @@ int ff_vk_exec_submit(FFVulkanContext *s, FFVkExecContext *e)
         return AVERROR_EXTERNAL;
     }
 
-    s->hwctx->lock_queue((AVHWDeviceContext *)s->frames->device_ref->data,
-                         e->qf, e->qi);
+    s->hwctx->lock_queue(s->device, e->qf, e->qi);
     ret = vk->QueueSubmit(e->queue, 1, &s_info, e->fence);
-    s->hwctx->unlock_queue((AVHWDeviceContext *)s->frames->device_ref->data,
-                           e->qf, e->qi);
+    s->hwctx->unlock_queue(s->device, e->qf, e->qi);
 
     if (ret != VK_SUCCESS) {
         av_log(s, AV_LOG_ERROR, "Unable to submit command buffer: %s\n",

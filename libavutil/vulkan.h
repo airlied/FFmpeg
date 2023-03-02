@@ -296,11 +296,6 @@ void ff_vk_exec_pool_free(FFVulkanContext *s, FFVkExecPool *pool);
 FFVkExecContext *ff_vk_exec_get(FFVkExecPool *pool);
 
 /**
- * Explicitly wait on an execution to be finished.
- * Starting via ff_vk_exec_start() also waits on it.
- */
-
-/**
  * Performs nb_queries queries and returns their results and statuses.
  * Execution must have been waited on to produce valid results.
  */
