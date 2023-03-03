@@ -572,7 +572,7 @@ void ff_vk_decode_free_frame(FFVulkanDecodeContext *ctx, FFVulkanDecodePicture *
         vk->DestroyImageView(ctx->s.hwctx->act_dev, vp->img_view_out, ctx->s.hwctx->alloc);
 
     /* Destroy image view (ref, unlayered) */
-    if (vp->img_view_ref)
+    if (vp->img_view_ref && !ctx->layered_dpb)
         vk->DestroyImageView(ctx->s.hwctx->act_dev, vp->img_view_ref, ctx->s.hwctx->alloc);
 
     av_frame_free(&vp->dpb_frame);
@@ -1170,7 +1170,7 @@ int ff_vk_decode_init(AVCodecContext *avctx)
             }
 
             err = vk_decode_create_view(ctx, &ctx->layered_view, &ctx->layered_aspect,
-                                        (AVVkFrame *)ctx->layered_frame->data,
+                                        (AVVkFrame *)ctx->layered_frame->data[0],
                                         s->hwfc->format[0]);
             if (err < 0)
                 goto fail;
