@@ -366,7 +366,7 @@ static int vk_h264_start_frame(AVCodecContext          *avctx,
 
     err = vk_h264_fill_pict(avctx, NULL, &vp->ref_slot, &vp->ref,
                             &hp->vkh264_ref, &hp->h264_ref, pic, 1,
-                            h->picture_structure, dpb_slot_index);
+                            h->DPB[dpb_slot_index].reference, dpb_slot_index);
     if (err < 0)
         return err;
 
@@ -382,7 +382,7 @@ static int vk_h264_start_frame(AVCodecContext          *avctx,
         err = vk_h264_fill_pict(avctx, &hp->ref_src[i], &vp->ref_slots[i],
                                 &vp->refs[i], &hp->vkh264_refs[i],
                                 &hp->h264_refs[i], h->short_ref[i], 0,
-                                h->DPB[dpb_slot_index].picture_structure,
+                                h->DPB[dpb_slot_index].reference,
                                 dpb_slot_index);
         if (err < 0)
             return err;
