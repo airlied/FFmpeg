@@ -122,6 +122,9 @@ int ff_vk_decode_prepare_frame(FFVulkanDecodeContext *ctx, AVFrame *pic,
     vkpic->nb_slices = 0;
     vkpic->slices_size = 0;
 
+    if (1)
+        vkpic->slices_size += ctx->s.hprops.minImportedHostPointerAlignment;
+
     /* If the decoder made a blank frame to make up for a missing ref, or the
      * frame is the current frame so it's missing one, create a re-representation */
     if (vkpic->img_view_ref)
@@ -130,15 +133,15 @@ int ff_vk_decode_prepare_frame(FFVulkanDecodeContext *ctx, AVFrame *pic,
     /* Pre-allocate slice buffer with a reasonable default */
     if (is_current) {
         uint64_t min_alloc = 4096;
-        if (0)
-            min_alloc = 2*ctx->s.hprops.minImportedHostPointerAlignment;
+        if (1)
+            min_alloc += 2*ctx->s.hprops.minImportedHostPointerAlignment;
 
         vkpic->slices = av_fast_realloc(NULL, &vkpic->slices_size_max, min_alloc);
         if (!vkpic->slices)
             return AVERROR(ENOMEM);
 
-        if (0)
-            vkpic->slices_size += ctx->s.hprops.minImportedHostPointerAlignment;
+        if (1)
+            vkpic->slices_size_max -= ctx->s.hprops.minImportedHostPointerAlignment;
     }
 
     vkpic->dpb_frame    = NULL;
@@ -203,7 +206,7 @@ int ff_vk_decode_add_slice(FFVulkanDecodePicture *vp,
     slice_off[nb] = vp->slices_size;
 
     slices = av_fast_realloc(vp->slices, &vp->slices_size_max,
-                             vp->slices_size + size + startcode_len);
+                             vp->slices_size + size + startcode_len + 4096);
     if (!slices)
         return AVERROR(ENOMEM);
 
@@ -310,8 +313,8 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
                    "Result of previous frame decoding: %li\n", prev_sub_res);
     }
 
-    if (0) {
-        size_t req_size;
+    if (1) {
+        size_t req_size, neg_offs;
         VkExternalMemoryBufferCreateInfo create_desc = {
             .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO,
             .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_HOST_ALLOCATION_BIT_EXT,
@@ -331,6 +334,9 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
         import_desc.pHostPointer = (void *)FFALIGN((uintptr_t)vp->slices,
                                                    ctx->s.hprops.minImportedHostPointerAlignment);
 
+        neg_offs = (uint8_t *)import_desc.pHostPointer - vp->slices;
+        /* have to add the gap from first slice to ptr */
+        data_size += ctx->s.hprops.minImportedHostPointerAlignment - neg_offs;
         req_size = FFALIGN(data_size,
                            ctx->s.hprops.minImportedHostPointerAlignment);
 
@@ -352,8 +358,6 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
                 av_free(sd_buf);
                 return err; /* This shouldn't error out, unless it's critical */
             } else {
-                size_t neg_offs = (uint8_t *)import_desc.pHostPointer - vp->slices;
-
                 sd_ref = av_buffer_create((uint8_t *)sd_buf, sizeof(*sd_buf),
                                           host_map_buf_free, &ctx->s, 0);
                 if (!sd_ref) {
