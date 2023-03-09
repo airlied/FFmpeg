@@ -49,7 +49,7 @@ static int vk_h264_fill_pict(AVCodecContext *avctx, H264Picture **ref_src,
                              VkVideoPictureResourceInfoKHR *ref,          /* Goes in ^ */
                              VkVideoDecodeH264DpbSlotInfoKHR *vkh264_ref, /* Goes in ^ */
                              StdVideoDecodeH264ReferenceInfo *h264_ref,   /* Goes in ^ */
-                             H264Picture *pic, int is_current, int picture_structure,
+                             H264Picture *pic, int is_current, int is_field, int picture_structure,
                              int dpb_slot_index)
 {
     FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
@@ -65,8 +65,8 @@ static int vk_h264_fill_pict(AVCodecContext *avctx, H264Picture **ref_src,
         .FrameNum = pic->long_ref ? pic->pic_id : pic->frame_num, /* TODO: kinda sure */
         .PicOrderCnt = { pic->field_poc[0], pic->field_poc[1] },
         .flags = (StdVideoDecodeH264ReferenceInfoFlags) {
-            .top_field_flag = !!(picture_structure & PICT_TOP_FIELD),
-            .bottom_field_flag = !!(picture_structure & PICT_BOTTOM_FIELD),
+            .top_field_flag = is_field ? !!(picture_structure & PICT_TOP_FIELD) : 0,
+            .bottom_field_flag = is_field ? !!(picture_structure & PICT_BOTTOM_FIELD) : 0,
             .used_for_long_term_reference = pic->reference && pic->long_ref,
             .is_non_existing = 0,
         },
@@ -366,7 +366,7 @@ static int vk_h264_start_frame(AVCodecContext          *avctx,
 
     err = vk_h264_fill_pict(avctx, NULL, &vp->ref_slot, &vp->ref,
                             &hp->vkh264_ref, &hp->h264_ref, pic, 1,
-                            h->DPB[dpb_slot_index].reference, dpb_slot_index);
+                            h->DPB[dpb_slot_index].field_picture, h->DPB[dpb_slot_index].reference, dpb_slot_index);
     if (err < 0)
         return err;
 
@@ -382,7 +382,7 @@ static int vk_h264_start_frame(AVCodecContext          *avctx,
         err = vk_h264_fill_pict(avctx, &hp->ref_src[i], &vp->ref_slots[i],
                                 &vp->refs[i], &hp->vkh264_refs[i],
                                 &hp->h264_refs[i], h->short_ref[i], 0,
-                                h->DPB[dpb_slot_index].reference,
+                                h->DPB[dpb_slot_index].field_picture, h->DPB[dpb_slot_index].reference,
                                 dpb_slot_index);
         if (err < 0)
             return err;
@@ -400,7 +400,7 @@ static int vk_h264_start_frame(AVCodecContext          *avctx,
         err = vk_h264_fill_pict(avctx, &hp->ref_src[i], &vp->ref_slots[i],
                                 &vp->refs[i], &hp->vkh264_refs[i],
                                 &hp->h264_refs[i], h->long_ref[r], 0,
-                                h->DPB[dpb_slot_index].picture_structure,
+                                h->DPB[dpb_slot_index].field_picture, h->DPB[dpb_slot_index].picture_structure,
                                 dpb_slot_index);
         if (err < 0)
             return err;
