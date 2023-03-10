@@ -140,6 +140,12 @@ typedef struct VkVideoDecodeVP9PictureInfoMESA {
     StdVideoVP9MESAFrameHeader *frame_header;
 } VkVideoDecodeVP9PictureInfoMESA;
 
+typedef struct VkVideoDecodeVP9DpbSlotInfoMESA {
+    VkStructureType sType;
+    const void *pNext;
+    uint8_t frameIdx;
+} VkVideoDecodeVP9DpbSlotInfoMESA;
+
 // TODO: what number goes here?
 #define VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_PICTURE_INFO_MESA 100666000
 
@@ -157,7 +163,8 @@ typedef struct VkVideoDecodeVP9CapabilitiesMESA {
 
 #define VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_CAPABILITIES_MESA 100666001
 #define VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_PROFILE_INFO_MESA 100666002
-
+#define VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_DPB_SLOT_INFO_MESA 100666003
+  
 typedef struct StdVideoVP9MESAMvDeltaProbabilities {
     uint8_t joint[3];
     uint8_t sign[2];

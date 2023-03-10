@@ -34,18 +34,21 @@ typedef struct VP9VulkanDecodePicture {
     FFVulkanDecodePicture           vp;
 
     /* Current Picture */
-    //    VkVideoDecodeVP9DpbSlotInfoMESA vkvp9_ref;
+    VkVideoDecodeVP9DpbSlotInfoMESA vkvp9_ref;
     StdVideoVP9MESAFrameHeader      vp9_frame_header;
     VkVideoDecodeVP9PictureInfoMESA vp9_pic_info;
 
-    //    const AV1Frame *ref_src[8];
-    //   VkVideoDecodeVP9DpbSlotInfoMESA vkvp9_refs[8];
+    const VP9Frame *ref_src[8];
+    VkVideoDecodeVP9DpbSlotInfoMESA vkvp9_refs[8];
+
+    uint8_t frame_id_set;
+    uint8_t frame_id;    
 } VP9VulkanDecodePicture;
 
 static int vk_vp9_fill_pict(AVCodecContext *avctx, const VP9Frame **ref_src,
                             VkVideoReferenceSlotInfoKHR *ref_slot,      /* Main structure */
                             VkVideoPictureResourceInfoKHR *ref,         /* Goes in ^ */
-			    //                            VkVideoDecodeAV1DpbSlotInfoMESA *vkav1_ref, /* Goes in ^ */
+                            VkVideoDecodeVP9DpbSlotInfoMESA *vkvp9_ref, /* Goes in ^ */
                             const VP9Frame *pic, int is_current,
                             int dpb_slot_index)
 {
@@ -58,6 +61,11 @@ static int vk_vp9_fill_pict(AVCodecContext *avctx, const VP9Frame **ref_src,
     if (err < 0)
         return err;
 
+    *vkvp9_ref = (VkVideoDecodeVP9DpbSlotInfoMESA) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_DPB_SLOT_INFO_MESA,
+        .frameIdx = hp->frame_id,
+    };
+
     *ref = (VkVideoPictureResourceInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
         .codedOffset = (VkOffset2D){ 0, 0 },
@@ -69,7 +77,7 @@ static int vk_vp9_fill_pict(AVCodecContext *avctx, const VP9Frame **ref_src,
 
     *ref_slot = (VkVideoReferenceSlotInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
-        .pNext = NULL,
+        .pNext = vkvp9_ref,
         .slotIndex = dpb_slot_index,
         .pPictureResource = ref,
     };
@@ -90,8 +98,35 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
     VP9VulkanDecodePicture *v9p = pic->hwaccel_picture_private;
     FFVulkanDecodePicture *vp = &v9p->vp;
     const AVPixFmtDescriptor *pixdesc = av_pix_fmt_desc_get(avctx->sw_pix_fmt);
+    int ref_count = 0;
+    int err;
 
-    int err = vk_vp9_fill_pict(avctx, NULL, &vp->ref_slot, &vp->ref,
+    if (!v9p->frame_id_set) {
+        unsigned slot_idx = 0;
+        for (unsigned i = 0; i < 32; i++) {
+            if (!(ctx->frame_id_alloc_mask & (1 << i))) {
+                slot_idx = i;
+                break;
+            }
+        }
+        v9p->frame_id = slot_idx;
+        v9p->frame_id_set = 1;
+        ctx->frame_id_alloc_mask |= (1 << slot_idx);
+    }
+
+    for (unsigned i = 0; i < 8; i++) {
+        if (h->refs[i].tf.f->pict_type == AV_PICTURE_TYPE_NONE)
+            continue;
+
+        err = vk_vp9_fill_pict(avctx, &v9p->ref_src[i], &vp->ref_slots[i], &vp->refs[i],
+                               &v9p->vkvp9_refs[i],
+                               &h->refs[i], 0, i);
+        if (err < 0)
+            return err;
+        ref_count++;
+    }
+    err = vk_vp9_fill_pict(avctx, NULL, &vp->ref_slot, &vp->ref,
+                           &v9p->vkvp9_ref,
                            pic, 1, 8);
     if (err < 0)
         return err;
@@ -105,6 +140,8 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_INFO_KHR,
         .pNext = &v9p->vp9_pic_info,
         .pSetupReferenceSlot = &vp->ref_slot,
+        .referenceSlotCount = ref_count,
+        .pReferenceSlots = vp->ref_slots,        
         .dstPictureResource = (VkVideoPictureResourceInfoKHR) {
             .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
             .codedOffset = (VkOffset2D){ 0, 0 },
@@ -162,6 +199,14 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
         .tile_cols_log2                    = h->h.tiling.log2_tile_cols,
         .uncompressed_header_size_in_bytes = h->h.uncompressed_header_size,
         .compressed_header_size_in_bytes   = h->h.compressed_header_size,
+
+        .ref_frame_idx[0] = h->h.refidx[0],
+        .ref_frame_idx[1] = h->h.refidx[1],
+        .ref_frame_idx[2] = h->h.refidx[2],
+
+        .ref_frame_sign_bias[0] = h->h.signbias[0],
+        .ref_frame_sign_bias[1] = h->h.signbias[1],
+        .ref_frame_sign_bias[2] = h->h.signbias[2],
     };
 
     for (unsigned i = 0; i < 8; i++) {
@@ -194,12 +239,22 @@ static int vk_vp9_end_frame(AVCodecContext *avctx)
     FFVulkanDecodePicture *vp = &v9p->vp;
     FFVulkanDecodePicture *rvp[8] = { 0 };
     AVFrame *rav[8] = { 0 };
+
+    for (int i = 0; i < vp->decode_info.referenceSlotCount; i++) {
+        VP9VulkanDecodePicture *rv9p = v9p->ref_src[i]->hwaccel_picture_private;
+        rvp[i] = &rv9p->vp;
+        rav[i] = v9p->ref_src[i]->tf.f;
+    }
     return ff_vk_decode_frame(avctx, pic->tf.f, vp, rav, rvp);
 }
 
 static void vk_vp9_free_frame_priv(AVCodecContext *avctx, void *data)
 {
     VP9VulkanDecodePicture *v9p = data;
+    FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
+    
+    if (v9p->frame_id_set)
+        ctx->frame_id_alloc_mask &= ~(1 << v9p->frame_id);
 
     /* Free frame resources, this also destroys the session parameters. */
     ff_vk_decode_free_frame(v9p->ctx, &v9p->vp);
