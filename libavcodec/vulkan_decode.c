@@ -283,11 +283,11 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
     /* Quirks */
     const int layered_dpb = ctx->layered_dpb;
 
-    VkVideoSessionParametersKHR *par = (VkVideoSessionParametersKHR *)vp->session_params->data;
+    VkVideoSessionParametersKHR *par = vp->session_params ? (VkVideoSessionParametersKHR *)vp->session_params->data : NULL;
     VkVideoBeginCodingInfoKHR decode_start = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_BEGIN_CODING_INFO_KHR,
         .videoSession = ctx->common.session,
-        .videoSessionParameters = *par,
+        .videoSessionParameters = par ? *par : NULL,
         .referenceSlotCount = vp->decode_info.referenceSlotCount,
         .pReferenceSlots = vp->decode_info.pReferenceSlots,
     };
@@ -305,9 +305,11 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
     /* The current decoding reference has to be bound as an inactive reference */
     VkVideoReferenceSlotInfoKHR *cur_vk_ref;
     cur_vk_ref = (void *)&decode_start.pReferenceSlots[decode_start.referenceSlotCount];
-    cur_vk_ref[0] = vp->ref_slot;
-    cur_vk_ref[0].slotIndex = -1;
-    decode_start.referenceSlotCount++;
+    if (cur_vk_ref) {
+      cur_vk_ref[0] = vp->ref_slot;
+      cur_vk_ref[0].slotIndex = -1;
+      decode_start.referenceSlotCount++;
+    }
 
     if (ctx->exec_pool.nb_queries) {
         int64_t prev_sub_res = 0;
@@ -361,9 +363,11 @@ int ff_vk_decode_frame(AVCodecContext *avctx,
     vp->slices_buf = NULL; /* Owned by the exec buffer from now on */
 
     /* Parameters */
-    err = ff_vk_exec_add_dep_buf(&ctx->s, exec, &vp->session_params, 1, 0);
-    if (err < 0)
+    if (vp->session_params) {
+      err = ff_vk_exec_add_dep_buf(&ctx->s, exec, &vp->session_params, 1, 0);
+      if (err < 0)
         return err;
+    }
 
     err = ff_vk_exec_add_dep_frame(&ctx->s, exec, pic,
                                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
