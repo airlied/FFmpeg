@@ -31,6 +31,9 @@ extern const VkExtensionProperties ff_vk_dec_hevc_ext;
 #if CONFIG_AV1_VULKAN_HWACCEL
 extern const VkExtensionProperties ff_vk_dec_av1_ext;
 #endif
+#if CONFIG_VP9_VULKAN_HWACCEL
+extern const VkExtensionProperties ff_vk_dec_vp9_ext;
+#endif
 
 static const VkExtensionProperties *dec_ext[] = {
 #if CONFIG_H264_VULKAN_HWACCEL
@@ -42,12 +45,16 @@ static const VkExtensionProperties *dec_ext[] = {
 #if CONFIG_AV1_VULKAN_HWACCEL
     [AV_CODEC_ID_AV1] = &ff_vk_dec_av1_ext,
 #endif
+#if CONFIG_VP9_VULKAN_HWACCEL
+    [AV_CODEC_ID_VP9] = &ff_vk_dec_vp9_ext,
+#endif
 };
 
 typedef struct VulkanVideoProfile {
     VkVideoDecodeH264ProfileInfoKHR h264_profile;
     VkVideoDecodeH264ProfileInfoKHR h265_profile;
     VkVideoDecodeAV1ProfileInfoMESA av1_profile;
+    VkVideoDecodeVP9ProfileInfoMESA vp9_profile;
     VkVideoDecodeUsageInfoKHR       usage;
     VkVideoProfileInfoKHR           profile;
     VkVideoProfileListInfoKHR       profile_list;
@@ -575,6 +582,11 @@ static int vulkan_decode_check_init(AVCodecContext *avctx, AVBufferRef *frames_r
                                                    &profile_data->av1_profile :
                                                    &local_av1_profile;
 
+    VkVideoDecodeVP9ProfileInfoMESA local_vp9_profile = { 0 };
+    VkVideoDecodeVP9ProfileInfoMESA *vp9_profile = profile_data ?
+                                                   &profile_data->vp9_profile :
+                                                   &local_vp9_profile;
+
     VkVideoDecodeUsageInfoKHR local_usage = { 0 };
     VkVideoDecodeUsageInfoKHR *usage = profile_data ?
                                        &profile_data->usage : &local_usage;
@@ -598,6 +610,9 @@ static int vulkan_decode_check_init(AVCodecContext *avctx, AVBufferRef *frames_r
     };
     VkVideoDecodeAV1CapabilitiesMESA av1_caps = {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_CAPABILITIES_MESA,
+    };
+    VkVideoDecodeVP9CapabilitiesMESA vp9_caps = {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_CAPABILITIES_MESA,
     };
     VkVideoFormatPropertiesKHR *ret_info;
     uint32_t nb_out_fmts = 0;
@@ -656,6 +671,12 @@ repeat:
         usage->pNext = av1_profile;
         av1_profile->sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_PROFILE_INFO_MESA;
         av1_profile->stdProfileIdc = cur_profile;
+    } else if (avctx->codec_id == AV_CODEC_ID_VP9) {
+        base_profile = STD_VIDEO_VP9_MESA_PROFILE_0;
+        dec_caps->pNext = &vp9_caps;
+        usage->pNext = vp9_profile;
+        vp9_profile->sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_PROFILE_INFO_MESA;
+        vp9_profile->profile = cur_profile;
     }
 
     usage->sType           = VK_STRUCTURE_TYPE_VIDEO_DECODE_USAGE_INFO_KHR;
@@ -712,6 +733,7 @@ repeat:
     max_level = avctx->codec_id == AV_CODEC_ID_H264 ? h264_caps.maxLevelIdc :
                 avctx->codec_id == AV_CODEC_ID_H265 ? h265_caps.maxLevelIdc :
                 avctx->codec_id == AV_CODEC_ID_AV1  ? av1_caps.maxLevelIdc  :
+                avctx->codec_id == AV_CODEC_ID_VP9  ? vp9_caps.level  :
                 0;
 
     if (ctx) {
