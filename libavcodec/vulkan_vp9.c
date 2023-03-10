@@ -145,6 +145,13 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
             .mode_deltas[0] = h->h.lf_delta.mode[0],
             .mode_deltas[1] = h->h.lf_delta.mode[1],
         },
+        .segmentation = (StdVideoVP9MESASegmentation) {
+            .flags = (StdVideoVP9MESASegmentationFlags) {
+                .enabled = h->h.segmentation.enabled,
+                .temporal_update = h->h.segmentation.temporal,
+                .update_map = h->h.segmentation.update_map,
+            },
+        },
         .frame_type                        = !h->h.keyframe,
         .profile                           = h->h.profile,
         .bit_depth                         = h->h.bpp,
@@ -156,6 +163,10 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
         .uncompressed_header_size_in_bytes = h->h.uncompressed_header_size,
         .compressed_header_size_in_bytes   = h->h.compressed_header_size,
     };
+
+    for (unsigned i = 0; i < 8; i++) {
+        memcpy(&v9p->vp9_frame_header.segmentation.lvl_lookup[i], h->h.segmentation.feat[i].lflvl, 8);
+    }
 
     av_log(avctx, AV_LOG_DEBUG, "Created frame parameters");
     v9p->ctx = ctx;
