@@ -69,15 +69,14 @@ typedef struct StdVideoVP9MESALoopFilter {
     uint8_t sharpness;
     int8_t ref_deltas[MAX_REF_LF_DELTAS];
     int8_t mode_deltas[MAX_MODE_LF_DELTAS];
-
 } StdVideoVP9MESALoopFilter;
 
-typedef struct StdVideoVP9MesaQuantization {
+typedef struct StdVideoVP9MESAQuantization {
     uint8_t base_q_idx;
     int8_t delta_q_y_dc;
     int8_t delta_q_uv_dc;
     int8_t delta_q_uv_ac;
-} StdVideoVP9MesaQuantization;
+} StdVideoVP9MESAQuantization;
 
 typedef struct StdVideoVP9MESASegmentationFlags {
     uint8_t enabled;
@@ -127,7 +126,7 @@ typedef struct StdVideoVP9MESAFrameHeader {
     uint8_t reset_frame_context;
     uint8_t frame_context_idx;
     StdVideoVP9MESALoopFilter loop_filter;
-    StdVideoVP9MesaQuantization quantization;
+    StdVideoVP9MESAQuantization quantization;
     StdVideoVP9MESASegmentation segmentation;
     uint8_t tile_cols_log2;
     uint8_t tile_rows_log2;

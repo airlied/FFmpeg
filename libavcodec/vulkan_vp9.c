@@ -42,6 +42,44 @@ typedef struct VP9VulkanDecodePicture {
     //   VkVideoDecodeVP9DpbSlotInfoMESA vkvp9_refs[8];
 } VP9VulkanDecodePicture;
 
+static int vk_vp9_fill_pict(AVCodecContext *avctx, const VP9Frame **ref_src,
+                            VkVideoReferenceSlotInfoKHR *ref_slot,      /* Main structure */
+                            VkVideoPictureResourceInfoKHR *ref,         /* Goes in ^ */
+			    //                            VkVideoDecodeAV1DpbSlotInfoMESA *vkav1_ref, /* Goes in ^ */
+                            const VP9Frame *pic, int is_current,
+                            int dpb_slot_index)
+{
+    FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
+    VP9VulkanDecodePicture *hp = pic->hwaccel_picture_private;
+    FFVulkanDecodePicture *vkpic = &hp->vp;
+
+    int err = ff_vk_decode_prepare_frame(ctx, pic->tf.f, vkpic, is_current,
+                                         ctx->dedicated_dpb);
+    if (err < 0)
+        return err;
+
+    *ref = (VkVideoPictureResourceInfoKHR) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
+        .codedOffset = (VkOffset2D){ 0, 0 },
+        .codedExtent = (VkExtent2D){ pic->tf.f->width, pic->tf.f->height },
+        .baseArrayLayer = (ctx->dedicated_dpb && ctx->layered_dpb) ?
+                          dpb_slot_index : 0,
+        .imageViewBinding = vkpic->img_view_ref,
+    };
+
+    *ref_slot = (VkVideoReferenceSlotInfoKHR) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
+        .pNext = NULL,
+        .slotIndex = dpb_slot_index,
+        .pPictureResource = ref,
+    };
+
+    if (ref_src)
+        *ref_src = pic;
+
+    return 0;
+}
+
 static int vk_vp9_start_frame(AVCodecContext          *avctx,
                               av_unused const uint8_t *buffer,
                               av_unused uint32_t       size)
@@ -53,6 +91,11 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
     FFVulkanDecodePicture *vp = &v9p->vp;
     const AVPixFmtDescriptor *pixdesc = av_pix_fmt_desc_get(avctx->sw_pix_fmt);
 
+    int err = vk_vp9_fill_pict(avctx, NULL, &vp->ref_slot, &vp->ref,
+                           pic, 1, 8);
+    if (err < 0)
+        return err;
+
     v9p->vp9_pic_info = (VkVideoDecodeVP9PictureInfoMESA) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_PICTURE_INFO_MESA,
         .frame_header = &v9p->vp9_frame_header,
@@ -61,6 +104,14 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
     vp->decode_info = (VkVideoDecodeInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_INFO_KHR,
         .pNext = &v9p->vp9_pic_info,
+        .pSetupReferenceSlot = &vp->ref_slot,
+        .dstPictureResource = (VkVideoPictureResourceInfoKHR) {
+            .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
+            .codedOffset = (VkOffset2D){ 0, 0 },
+            .codedExtent = (VkExtent2D){ pic->tf.f->width, pic->tf.f->height },
+            .baseArrayLayer = 0,
+            .imageViewBinding = vp->img_view_out,
+        },
     };
 
     v9p->vp9_frame_header = (StdVideoVP9MESAFrameHeader) {
@@ -74,12 +125,36 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
             .allow_high_precision_mv      = h->h.keyframe ? 0 : h->h.highprecisionmvs,
             .frame_parallel_decoding_mode = h->h.parallelmode,
         },
+	.quantization = (StdVideoVP9MESAQuantization) {
+            .base_q_idx = h->h.yac_qi,
+            .delta_q_y_dc = h->h.ydc_qdelta,
+            .delta_q_uv_dc = h->h.uvdc_qdelta,
+            .delta_q_uv_ac = h->h.uvac_qdelta,
+	},
+        .loop_filter = (StdVideoVP9MESALoopFilter) {
+            .flags = (StdVideoVP9MESALoopFilterFlags) {
+                .delta_enabled = h->h.lf_delta.enabled,
+                .delta_update = h->h.lf_delta.updated,
+            },
+            .level = h->h.filter.level,
+            .sharpness = h->h.filter.sharpness,
+            .ref_deltas[0] = h->h.lf_delta.ref[0],
+            .ref_deltas[1] = h->h.lf_delta.ref[1],
+            .ref_deltas[2] = h->h.lf_delta.ref[2],
+            .ref_deltas[3] = h->h.lf_delta.ref[3],
+            .mode_deltas[0] = h->h.lf_delta.mode[0],
+            .mode_deltas[1] = h->h.lf_delta.mode[1],
+        },
+        .frame_type                        = !h->h.keyframe,
         .profile                           = h->h.profile,
         .bit_depth                         = h->h.bpp,
+        .interpolation_filter              = h->h.filtermode ^ (h->h.filtermode <= 1),
         .width                             = avctx->width,
         .height                            = avctx->height,
         .tile_rows_log2                    = h->h.tiling.log2_tile_rows,
         .tile_cols_log2                    = h->h.tiling.log2_tile_cols,
+        .uncompressed_header_size_in_bytes = h->h.uncompressed_header_size,
+        .compressed_header_size_in_bytes   = h->h.compressed_header_size,
     };
 
     av_log(avctx, AV_LOG_DEBUG, "Created frame parameters");
