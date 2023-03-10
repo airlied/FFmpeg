@@ -42,7 +42,7 @@ typedef struct VP9VulkanDecodePicture {
     VkVideoDecodeVP9DpbSlotInfoMESA vkvp9_refs[8];
 
     uint8_t frame_id_set;
-    uint8_t frame_id;    
+    uint8_t frame_id;
 } VP9VulkanDecodePicture;
 
 static int vk_vp9_fill_pict(AVCodecContext *avctx, const VP9Frame **ref_src,
@@ -141,7 +141,7 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
         .pNext = &v9p->vp9_pic_info,
         .pSetupReferenceSlot = &vp->ref_slot,
         .referenceSlotCount = ref_count,
-        .pReferenceSlots = vp->ref_slots,        
+        .pReferenceSlots = vp->ref_slots,
         .dstPictureResource = (VkVideoPictureResourceInfoKHR) {
             .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
             .codedOffset = (VkOffset2D){ 0, 0 },
@@ -227,6 +227,7 @@ static int vk_vp9_decode_slice(AVCodecContext *avctx,
     FFVulkanDecodePicture *vp = &v9p->vp;
     uint32_t slice_count;
     const uint32_t *slice_offsets;
+
     return ff_vk_decode_add_slice(avctx, vp, data, size, 0,
                                   &slice_count, &slice_offsets);
 }
