@@ -100,8 +100,8 @@ static int vaapi_vp9_start_frame(AVCodecContext          *avctx,
     }
 
     for (i = 0; i < 8; i++) {
-        if (h->refs[i].f->buf[0])
-            pic_param.reference_frames[i] = ff_vaapi_get_surface_id(h->refs[i].f);
+        if (h->refs[i].tf.f->buf[0])
+            pic_param.reference_frames[i] = ff_vaapi_get_surface_id(h->refs[i].tf.f);
         else
             pic_param.reference_frames[i] = VA_INVALID_ID;
     }
