@@ -121,7 +121,7 @@ typedef struct VP9Context {
     int w, h;
     enum AVPixelFormat pix_fmt, last_fmt, gf_fmt;
     unsigned sb_cols, sb_rows, rows, cols;
-    ThreadFrame next_refs[8];
+    VP9Frame next_refs[8];
 
     struct {
         uint8_t lim_lut[64];

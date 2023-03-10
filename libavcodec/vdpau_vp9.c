@@ -51,14 +51,14 @@ static int vdpau_vp9_start_frame(AVCodecContext *avctx,
     info->goldenReference = VDP_INVALID_HANDLE;
     info->altReference = VDP_INVALID_HANDLE;
 
-    if (h->refs[h->h.refidx[0]].f && h->refs[h->h.refidx[0]].f->private_ref) {
-        info->lastReference               = ff_vdpau_get_surface_id(h->refs[h->h.refidx[0]].f);
+    if (h->refs[h->h.refidx[0]].tf.f && h->refs[h->h.refidx[0]].tf.f->private_ref) {
+        info->lastReference               = ff_vdpau_get_surface_id(h->refs[h->h.refidx[0]].tf.f);
     }
-    if (h->refs[h->h.refidx[1]].f && h->refs[h->h.refidx[1]].f->private_ref) {
-        info->goldenReference             = ff_vdpau_get_surface_id(h->refs[h->h.refidx[1]].f);
+    if (h->refs[h->h.refidx[1]].tf.f && h->refs[h->h.refidx[1]].tf.f->private_ref) {
+        info->goldenReference             = ff_vdpau_get_surface_id(h->refs[h->h.refidx[1]].tf.f);
     }
-    if (h->refs[h->h.refidx[2]].f && h->refs[h->h.refidx[2]].f->private_ref) {
-        info->altReference                = ff_vdpau_get_surface_id(h->refs[h->h.refidx[2]].f);
+    if (h->refs[h->h.refidx[2]].tf.f && h->refs[h->h.refidx[2]].tf.f->private_ref) {
+        info->altReference                = ff_vdpau_get_surface_id(h->refs[h->h.refidx[2]].tf.f);
     }
 
     info->profile                  = h->h.profile;

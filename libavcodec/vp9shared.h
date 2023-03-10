@@ -165,7 +165,7 @@ typedef struct VP9BitstreamHeader {
 typedef struct VP9SharedContext {
     VP9BitstreamHeader h;
 
-    ThreadFrame refs[8];
+    VP9Frame refs[8];
 #define CUR_FRAME 0
 #define REF_FRAME_MVPAIR 1
 #define REF_FRAME_SEGMAP 2
