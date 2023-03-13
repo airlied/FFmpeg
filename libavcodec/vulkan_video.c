@@ -49,6 +49,12 @@ const FFVkCodecMap ff_vk_codec_map[AV_CODEC_ID_FIRST_AUDIO] = {
                            FF_VK_EXT_VIDEO_DECODE_AV1 | FF_VK_EXT_SYNC2,
                            0x01000000 /* TODO fix this */
     },
+    [AV_CODEC_ID_VP9] = {
+                           0,
+                           0,
+                           FF_VK_EXT_VIDEO_DECODE_VP9 | FF_VK_EXT_SYNC2,
+                           0x00100000 /* TODO fix this */
+    },
 };
 
 #define ASPECT_2PLANE (VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT)
