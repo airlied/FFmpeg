@@ -254,10 +254,9 @@ static int vk_vp9_end_frame(AVCodecContext *avctx)
 static void vk_vp9_free_frame_priv(AVCodecContext *avctx, void *data)
 {
     VP9VulkanDecodePicture *v9p = data;
-    FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
     
     if (v9p->frame_id_set)
-        ctx->frame_id_alloc_mask &= ~(1 << v9p->frame_id);
+        v9p->ctx->frame_id_alloc_mask &= ~(1 << v9p->frame_id);
 
     /* Free frame resources, this also destroys the session parameters. */
     ff_vk_decode_free_frame(v9p->ctx, &v9p->vp);
