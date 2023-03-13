@@ -199,6 +199,8 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
         .tile_cols_log2                    = h->h.tiling.log2_tile_cols,
         .uncompressed_header_size_in_bytes = h->h.uncompressed_header_size,
         .compressed_header_size_in_bytes   = h->h.compressed_header_size,
+        .reset_frame_context               = h->h.resetctx,
+        .frame_context_idx                 = h->h.framectxid,
 
         .ref_frame_idx[0] = h->h.refidx[0],
         .ref_frame_idx[1] = h->h.refidx[1],
