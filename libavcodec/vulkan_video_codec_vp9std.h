@@ -138,6 +138,8 @@ typedef struct VkVideoDecodeVP9PictureInfoMESA {
     VkStructureType sType;
     const void *pNext;
     StdVideoVP9MESAFrameHeader *frame_header;
+    /* derived value used in amd/intel hw */
+    uint8_t use_prev_in_find_mv_refs;
 } VkVideoDecodeVP9PictureInfoMESA;
 
 typedef struct VkVideoDecodeVP9DpbSlotInfoMESA {

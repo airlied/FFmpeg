@@ -134,6 +134,7 @@ static int vk_vp9_start_frame(AVCodecContext          *avctx,
     v9p->vp9_pic_info = (VkVideoDecodeVP9PictureInfoMESA) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_VP9_PICTURE_INFO_MESA,
         .frame_header = &v9p->vp9_frame_header,
+        .use_prev_in_find_mv_refs = h->h.use_last_frame_mvs,
     };
 
     vp->decode_info = (VkVideoDecodeInfoKHR) {
