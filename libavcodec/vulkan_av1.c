@@ -72,10 +72,10 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
 
     for (unsigned i = 0; i < 7; i++) {
         const int idx = pic->raw_frame_header->ref_frame_idx[i];
-        vkav1_ref->ref_order_hints[i] = pic->raw_frame_header->ref_order_hint[idx];
+        vkav1_ref->ref_order_hint[i] = pic->raw_frame_header->ref_order_hint[idx];
     }
 
-    vkav1_ref->cdf_update_disabled = pic->raw_frame_header->disable_frame_end_update_cdf;
+    vkav1_ref->disable_frame_end_update_cdf = pic->raw_frame_header->disable_frame_end_update_cdf;
 
     *ref = (VkVideoPictureResourceInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR,
