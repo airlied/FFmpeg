@@ -671,7 +671,6 @@ static int decode_nal_units(H264Context *h, const uint8_t *buf, int buf_size)
             avpriv_request_sample(avctx, "data partitioning");
             break;
         case H264_NAL_SEI:
-            av_buffer_unref(&h->hwaccel_params_buf);
             if (h->setup_finished) {
                 avpriv_request_sample(avctx, "Late SEI");
                 break;
@@ -705,6 +704,7 @@ static int decode_nal_units(H264Context *h, const uint8_t *buf, int buf_size)
             break;
         }
         case H264_NAL_PPS:
+            av_buffer_unref(&h->hwaccel_params_buf);
             if (avctx->hwaccel && avctx->hwaccel->decode_params) {
                 ret = avctx->hwaccel->decode_params(avctx,
                                                     nal->type,
