@@ -45,7 +45,7 @@ typedef struct FFVulkanDecodeContext {
     VkVideoDecodeCapabilitiesKHR dec_caps;
     int init;
 
-    uint32_t frame_id_alloc_mask; /* For AV1 only */
+    uint32_t dpb_slot_alloc_mask; /* For AV1 only */
 
     FFVkQueueFamilyCtx qf_dec;
     FFVkExecPool exec_pool;

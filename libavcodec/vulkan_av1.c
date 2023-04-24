@@ -45,16 +45,15 @@ typedef struct AV1VulkanDecodePicture {
     const AV1Frame                     *ref_src   [AV1_NUM_REF_FRAMES];
     VkVideoDecodeAV1DpbSlotInfoMESA     vkav1_refs[AV1_NUM_REF_FRAMES];
 
-    uint8_t frame_id_set;
-    uint8_t frame_id;
+    uint8_t dpb_slot_set;
+    uint8_t dpb_slot;
 } AV1VulkanDecodePicture;
 
 static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
                             VkVideoReferenceSlotInfoKHR *ref_slot,      /* Main structure */
                             VkVideoPictureResourceInfoKHR *ref,         /* Goes in ^ */
                             VkVideoDecodeAV1DpbSlotInfoMESA *vkav1_ref, /* Goes in ^ */
-                            const AV1Frame *pic, int is_current, int has_grain,
-                            int dpb_slot_index)
+                            const AV1Frame *pic, int is_current, int has_grain)
 {
     FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
     AV1VulkanDecodePicture *hp = pic->hwaccel_picture_private;
@@ -67,7 +66,6 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
 
     *vkav1_ref = (VkVideoDecodeAV1DpbSlotInfoMESA) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_DECODE_AV1_DPB_SLOT_INFO_MESA,
-        .frameIdx = hp->frame_id,
     };
 
     for (unsigned i = 0; i < 7; i++) {
@@ -82,14 +80,14 @@ static int vk_av1_fill_pict(AVCodecContext *avctx, const AV1Frame **ref_src,
         .codedOffset = (VkOffset2D){ 0, 0 },
         .codedExtent = (VkExtent2D){ pic->f->width, pic->f->height },
         .baseArrayLayer = ((has_grain || ctx->dedicated_dpb) && ctx->layered_dpb) ?
-                          dpb_slot_index : 0,
+                          hp->dpb_slot : 0,
         .imageViewBinding = vkpic->img_view_ref,
     };
 
     *ref_slot = (VkVideoReferenceSlotInfoKHR) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR,
         .pNext = vkav1_ref,
-        .slotIndex = dpb_slot_index,
+        .slotIndex = hp->dpb_slot,
         .pPictureResource = ref,
     };
 
@@ -235,17 +233,18 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
     if (!vp->session_params)
         return AVERROR(ENOMEM);
 
-    if (!ap->frame_id_set) {
-        unsigned slot_idx = 0;
-        for (unsigned i = 0; i < 32; i++) {
-            if (!(ctx->frame_id_alloc_mask & (1 << i))) {
+    if (!ap->dpb_slot_set) {
+        unsigned slot_idx = -1;
+        for (unsigned i = 0; i < ctx->common.caps.maxDpbSlots; i++) {
+            if (!(ctx->dpb_slot_alloc_mask & (1 << i))) {
                 slot_idx = i;
                 break;
             }
         }
-        ap->frame_id = slot_idx;
-        ap->frame_id_set = 1;
-        ctx->frame_id_alloc_mask |= (1 << slot_idx);
+        assert(slot_idx >= 0);
+        ap->dpb_slot = slot_idx;
+        ap->dpb_slot_set = 1;
+        ctx->dpb_slot_alloc_mask |= (1 << slot_idx);
     }
 
     /* Fill in references */
@@ -256,7 +255,7 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
 
         err = vk_av1_fill_pict(avctx, &ap->ref_src[i], &vp->ref_slots[i],
                                &vp->refs[i], &ap->vkav1_refs[i],
-                               ref_frame, 0, 0, i);
+                               ref_frame, 0, 0);
         if (err < 0)
             return err;
 
@@ -265,7 +264,7 @@ static int vk_av1_start_frame(AVCodecContext          *avctx,
 
     err = vk_av1_fill_pict(avctx, NULL, &vp->ref_slot, &vp->ref,
                            &ap->vkav1_ref,
-                           pic, 1, apply_grain, 8);
+                           pic, 1, apply_grain);
     if (err < 0)
         return err;
 
@@ -550,8 +549,8 @@ static void vk_av1_free_frame_priv(AVCodecContext *avctx, void *data)
     AV1VulkanDecodePicture *ap = data;
     FFVulkanDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
 
-    if (ap->frame_id_set)
-        ctx->frame_id_alloc_mask &= ~(1 << ap->frame_id);
+    if (ap->dpb_slot_set)
+        ctx->dpb_slot_alloc_mask &= ~(1 << ap->dpb_slot);
 
     /* Free frame resources, this also destroys the session parameters. */
     ff_vk_decode_free_frame(ap->ctx, &ap->vp);
