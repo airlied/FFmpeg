@@ -99,6 +99,32 @@ static int vk_h264_fill_pict(AVCodecContext *avctx, H264Picture **ref_src,
     return 0;
 }
 
+static StdVideoH264LevelIdc convert_to_vk_level_idc(int level_idc)
+{
+    switch (level_idc) {
+    case 10: return STD_VIDEO_H264_LEVEL_IDC_1_0;
+    case 11: return STD_VIDEO_H264_LEVEL_IDC_1_1;
+    case 12: return STD_VIDEO_H264_LEVEL_IDC_1_2;
+    case 13: return STD_VIDEO_H264_LEVEL_IDC_1_3;
+    case 20: return STD_VIDEO_H264_LEVEL_IDC_2_0;
+    case 21: return STD_VIDEO_H264_LEVEL_IDC_2_1;
+    case 22: return STD_VIDEO_H264_LEVEL_IDC_2_2;
+    case 30: return STD_VIDEO_H264_LEVEL_IDC_3_0;
+    case 31: return STD_VIDEO_H264_LEVEL_IDC_3_1;
+    case 32: return STD_VIDEO_H264_LEVEL_IDC_3_2;
+    case 40: return STD_VIDEO_H264_LEVEL_IDC_4_0;
+    case 41: return STD_VIDEO_H264_LEVEL_IDC_4_1;
+    case 42: return STD_VIDEO_H264_LEVEL_IDC_4_2;
+    case 50: return STD_VIDEO_H264_LEVEL_IDC_5_0;
+    case 51: return STD_VIDEO_H264_LEVEL_IDC_5_1;
+    case 52: return STD_VIDEO_H264_LEVEL_IDC_5_2;
+    case 60: return STD_VIDEO_H264_LEVEL_IDC_6_0;
+    case 61: return STD_VIDEO_H264_LEVEL_IDC_6_1;
+    default:
+    case 62: return STD_VIDEO_H264_LEVEL_IDC_6_2;
+    }
+}
+
 static void set_sps(const SPS *sps,
                     StdVideoH264ScalingLists *vksps_scaling,
                     StdVideoH264HrdParameters *vksps_vui_header,
@@ -164,7 +190,7 @@ static void set_sps(const SPS *sps,
 
     *vksps = (StdVideoH264SequenceParameterSet) {
         .profile_idc = sps->profile_idc,
-        .level_idc = sps->level_idc,
+        .level_idc = convert_to_vk_level_idc(sps->level_idc),
         .seq_parameter_set_id = sps->sps_id,
         .chroma_format_idc = sps->chroma_format_idc,
         .bit_depth_luma_minus8 = sps->bit_depth_luma - 8,
