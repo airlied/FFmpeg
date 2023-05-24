@@ -169,6 +169,25 @@ static int vk_hevc_fill_pict(AVCodecContext *avctx, HEVCFrame **ref_src,
     return 0;
 }
 
+static StdVideoH265LevelIdc convert_to_vk_level_idc(int level_idc)
+{
+    switch (level_idc) {
+    case 10: return STD_VIDEO_H265_LEVEL_IDC_1_0;
+    case 20: return STD_VIDEO_H265_LEVEL_IDC_2_0;
+    case 21: return STD_VIDEO_H265_LEVEL_IDC_2_1;
+    case 30: return STD_VIDEO_H265_LEVEL_IDC_3_0;
+    case 31: return STD_VIDEO_H265_LEVEL_IDC_3_1;
+    case 40: return STD_VIDEO_H265_LEVEL_IDC_4_0;
+    case 41: return STD_VIDEO_H265_LEVEL_IDC_4_1;
+    case 50: return STD_VIDEO_H265_LEVEL_IDC_5_0;
+    case 51: return STD_VIDEO_H265_LEVEL_IDC_5_1;
+    case 60: return STD_VIDEO_H265_LEVEL_IDC_6_0;
+    case 61: return STD_VIDEO_H265_LEVEL_IDC_6_1;
+    default:
+    case 62: return STD_VIDEO_H265_LEVEL_IDC_6_2;
+    }
+}
+
 static void set_sps(const HEVCSPS *sps, int sps_idx,
                     StdVideoH265ScalingLists *vksps_scaling,
                     StdVideoH265HrdParameters *vksps_vui_header,
@@ -292,7 +311,7 @@ static void set_sps(const HEVCSPS *sps, int sps_idx,
             .general_frame_only_constraint_flag = sps->ptl.general_ptl.frame_only_constraint_flag,
         },
         .general_profile_idc = sps->ptl.general_ptl.profile_idc,
-        .general_level_idc = sps->ptl.general_ptl.level_idc,
+        .general_level_idc = convert_to_vk_level_idc(sps->ptl.general_ptl.level_idc),
     };
 
     for (int i = 0; i < sps->max_sub_layers; i++) {
@@ -583,7 +602,7 @@ static void set_vps(const HEVCVPS *vps,
             .general_frame_only_constraint_flag = vps->ptl.general_ptl.frame_only_constraint_flag,
         },
         .general_profile_idc = vps->ptl.general_ptl.profile_idc,
-        .general_level_idc = vps->ptl.general_ptl.level_idc,
+        .general_level_idc = convert_to_vk_level_idc(vps->ptl.general_ptl.level_idc),
     };
 
     for (int i = 0; i < vps->vps_max_sub_layers; i++) {
