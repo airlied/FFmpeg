@@ -428,6 +428,9 @@ static const VulkanOptExtension optional_device_exts[] = {
 #endif
     { VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,                FF_VK_EXT_VIDEO_DECODE_H265      },
     { "VK_MESA_video_decode_av1",                             FF_VK_EXT_VIDEO_DECODE_AV1       },
+#if CONFIG_VULKAN_ENCODE
+    { "VK_MESA_video_encode_av1",                             FF_VK_EXT_VIDEO_ENCODE_AV1       },
+#endif
 };
 
 static VkBool32 VKAPI_CALL vk_dbg_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
