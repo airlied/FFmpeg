@@ -1877,6 +1877,7 @@ static int prepare_frame(AVHWFramesContext *hwfc, FFVkExecPool *ectx,
     VkImageLayout new_layout;
     VkAccessFlags2 new_access;
     VkPipelineStageFlagBits2 src_stage = VK_PIPELINE_STAGE_2_NONE;
+    int do_clear = 0;
 
     /* This is dirty - but it works. The vulkan.c dependency system doesn't
      * free non-refcounted frames, and non-refcounted hardware frames cannot
@@ -1922,7 +1923,19 @@ static int prepare_frame(AVHWFramesContext *hwfc, FFVkExecPool *ectx,
     case PREP_MODE_DECODING_DPB:
         new_layout = VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR;
         new_access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+        do_clear = 1;
         break;
+    }
+    if (do_clear) {
+        AVVkFrame *vkf = (AVVkFrame *)tmp_frame.data[0];
+        VkClearColorValue zeroval = { 0 };
+        VkImageSubresourceRange range = (VkImageSubresourceRange) {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .layerCount = 1,
+            .levelCount = 1,
+        };
+        vk->CmdClearColorImage(cmd_buf, vkf->img[0],
+                               vkf->layout[0], &zeroval, 1, &range);
     }
 
     ff_vk_frame_barrier(&p->vkctx, exec, &tmp_frame, img_bar, &nb_img_bar,
