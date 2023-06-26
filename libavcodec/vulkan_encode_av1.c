@@ -35,7 +35,7 @@ static av_cold int vulkan_encode_av1_init(AVCodecContext *avctx)
     err = ff_cbs_init(&enc->cbc, AV_CODEC_ID_AV1, avctx);
     if (err < 0)
         return err;
-
+    
     err = ff_vulkan_encode_init(avctx, &enc->vkenc, NULL, NULL,
                                 &encoder, 0, 0);
     if (err < 0)

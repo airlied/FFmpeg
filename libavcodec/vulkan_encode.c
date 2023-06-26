@@ -29,6 +29,10 @@ const VkExtensionProperties ff_vk_enc_ext[AV_CODEC_ID_FIRST_AUDIO] = {
         .extensionName = VK_STD_VULKAN_VIDEO_CODEC_H265_ENCODE_EXTENSION_NAME,
         .specVersion   = VK_STD_VULKAN_VIDEO_CODEC_H265_ENCODE_SPEC_VERSION,
     },
+    [AV_CODEC_ID_AV1] = (VkExtensionProperties) {
+        .extensionName = VK_STD_VULKAN_VIDEO_CODEC_AV1_ENCODE_EXTENSION_NAME,
+        .specVersion   = VK_STD_VULKAN_VIDEO_CODEC_AV1_ENCODE_SPEC_VERSION,
+    },    
 };
 
 const AVCodecHWConfigInternal *const ff_vulkan_encode_hw_configs[] = {
@@ -300,10 +304,6 @@ av_cold int ff_vulkan_encode_init(AVCodecContext *avctx, FFVulkanEncodeContext *
            CODEC_VER(ff_vk_enc_ext[avctx->codec_id].specVersion));
     av_log(avctx, AV_LOG_VERBOSE, "    encode quality levels: %i\n",
            ctx->enc_caps.maxQualityLevels);
-    av_log(avctx, AV_LOG_VERBOSE, "    encode image width alignment: %i\n",
-           ctx->enc_caps.encodeInputPictureGranularity.width);
-    av_log(avctx, AV_LOG_VERBOSE, "    encode image height alignment: %i\n",
-           ctx->enc_caps.encodeInputPictureGranularity.height);
     av_log(avctx, AV_LOG_VERBOSE, "    Capability flags:%s%s%s\n",
            ctx->caps.flags ? "" :
                " none",
