@@ -23,12 +23,16 @@ typedef struct VulkanEncodeAV1Context {
     StdVideoAV1MESASequenceHeader vk_sh;
 
     int enable_128x128_superblock;
+    int surface_width;
+    int surface_height;
 
     int gop_size;
     /** user options */
     int profile;
     int tier;
-
+    int level;
+    int tile_cols;
+    int tile_rows;
 } VulkanEncodeAV1Context;
 
 typedef struct VulkanEncodeAV1Picture {
@@ -124,18 +128,17 @@ static int vulkan_encode_av1_init_sequence_params(AVCodecContext *avctx)
     if (avctx->level != FF_LEVEL_UNKNOWN) {
         sh->seq_level_idx[0] = avctx->level;
     } else {
-        //        const AV1LevelDescriptor *level;
+        const AV1LevelDescriptor *level;
         float framerate;
 
         if (avctx->framerate.num > 0 && avctx->framerate.den > 0)
             framerate = avctx->framerate.num / avctx->framerate.den;
         else
             framerate = 0;
-#if 0
-        level = ff_av1_guess_level(avctx->bit_rate, priv->tier,
-                                   ctx->surface_width, ctx->surface_height,
-                                   priv->tile_rows * priv->tile_cols,
-                                   priv->tile_cols, framerate);
+        level = ff_av1_guess_level(avctx->bit_rate, enc->tier,
+                                   enc->surface_width, enc->surface_height,
+                                   enc->tile_rows * enc->tile_cols,
+                                   enc->tile_cols, framerate);
         if (level) {
             av_log(avctx, AV_LOG_VERBOSE, "Using level %s.\n", level->name);
             sh->seq_level_idx[0] = level->level_idx;
@@ -145,7 +148,6 @@ static int vulkan_encode_av1_init_sequence_params(AVCodecContext *avctx)
             sh->seq_level_idx[0] = 19;
             sh->seq_tier[0] = 1;
         }
-#endif
     }
 
     vkseq->seq_profile             = sh->seq_profile;
@@ -337,6 +339,8 @@ static av_cold int vulkan_encode_av1_init(AVCodecContext *avctx)
 
     av_log(avctx, AV_LOG_VERBOSE, "AV1 encoder capabilities:\n");
 
+    enc->surface_width  = FFALIGN(avctx->width,  128);
+    enc->surface_height = FFALIGN(avctx->height, 128);
     err = vulkan_encode_av1_init_sequence_params(avctx);
     if (err < 0)
         return err;
@@ -381,6 +385,28 @@ static const AVOption vulkan_encode_av1_options[] = {
     { PROFILE("high",               FF_PROFILE_AV1_HIGH) },
     { PROFILE("professional",       FF_PROFILE_AV1_PROFESSIONAL) },
 #undef PROFILE
+
+    { "level", "Set level (seq_level_idx)",
+      OFFSET(level), AV_OPT_TYPE_INT,
+      { .i64 = FF_LEVEL_UNKNOWN }, FF_LEVEL_UNKNOWN, 0x1f, FLAGS, "level" },
+
+#define LEVEL(name, value) name, NULL, 0, AV_OPT_TYPE_CONST, \
+      { .i64 = value }, 0, 0, FLAGS, "level"
+    { LEVEL("2.0",  0) },
+    { LEVEL("2.1",  1) },
+    { LEVEL("3.0",  4) },
+    { LEVEL("3.1",  5) },
+    { LEVEL("4.0",  8) },
+    { LEVEL("4.1",  9) },
+    { LEVEL("5.0", 12) },
+    { LEVEL("5.1", 13) },
+    { LEVEL("5.2", 14) },
+    { LEVEL("5.3", 15) },
+    { LEVEL("6.0", 16) },
+    { LEVEL("6.1", 17) },
+    { LEVEL("6.2", 18) },
+    { LEVEL("6.3", 19) },
+#undef LEVEL
     { NULL },
 };
 
