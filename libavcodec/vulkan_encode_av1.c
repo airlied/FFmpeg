@@ -4,6 +4,7 @@
 #include "cbs_av1.h"
 #include "codec_internal.h"
 #include "version.h"
+#include "av1_profile_level.h"
 
 #include "vulkan_encode.h"
 
@@ -23,6 +24,7 @@ typedef struct VulkanEncodeAV1Context {
 
     int enable_128x128_superblock;
 
+    int gop_size;
     /** user options */
     int profile;
     int tier;
@@ -30,7 +32,10 @@ typedef struct VulkanEncodeAV1Context {
 } VulkanEncodeAV1Context;
 
 typedef struct VulkanEncodeAV1Picture {
-
+    StdVideoAV1MESAFrameHeader vkav1_fh;
+    VkVideoEncodeAV1PictureInfoMESA vkav1pic_info;
+    //    VkVideoEncodeAV1RateControlInfoEXT vkrc_info;
+    //    VkVideoEncodeAV1RateControlLayerInfoEXT vkrc_layer_info;
 } VulkanEncodeAV1Picture;
 
 static int vulkan_encode_av1_add_obu(AVCodecContext *avctx,
@@ -187,6 +192,111 @@ end:
     return ret;
 }
 
+static av_cold int vulkan_encode_av1_create_session(AVCodecContext *avctx)
+{
+    VkResult ret;
+    VulkanEncodeAV1Context *enc = avctx->priv_data;
+    FFVulkanFunctions *vk = &enc->vkenc.s.vkfn;
+
+    VkVideoEncodeAV1SessionParametersAddInfoMESA av1_params_info;
+    VkVideoEncodeAV1SessionParametersCreateInfoMESA av1_params;
+    VkVideoSessionParametersCreateInfoKHR session_params_create;
+
+    av1_params_info = (VkVideoEncodeAV1SessionParametersAddInfoMESA) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_SESSION_PARAMETERS_ADD_INFO_MESA,
+        .sequence_header = &enc->vk_sh,
+    };
+
+    av1_params = (VkVideoEncodeAV1SessionParametersCreateInfoMESA) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_SESSION_PARAMETERS_CREATE_INFO_MESA,
+        .pParametersAddInfo = &av1_params_info,
+    };
+
+    session_params_create = (VkVideoSessionParametersCreateInfoKHR) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_PARAMETERS_CREATE_INFO_KHR,
+        .pNext = &av1_params,
+        .videoSession = enc->vkenc.common.session,
+        .videoSessionParametersTemplate = NULL,
+    };
+
+    ret = vk->CreateVideoSessionParametersKHR(enc->vkenc.s.hwctx->act_dev, &session_params_create,
+                                              enc->vkenc.s.hwctx->alloc, &enc->vkenc.session_params);
+    if (ret != VK_SUCCESS) {
+        av_log(avctx, AV_LOG_ERROR, "Unable to create Vulkan video session parameters: %s!\n",
+               ff_vk_ret2str(ret));
+        return AVERROR_EXTERNAL;
+    }
+
+    return 0;
+}
+
+static int vulkan_encode_av1_init_pic_headers(AVCodecContext *avctx,
+                                              FFVulkanEncodePicture *pic)
+{
+    VulkanEncodeAV1Context    *enc = avctx->priv_data;
+    VulkanEncodeAV1Picture   *av1pic = pic->priv_data;
+    FFVulkanEncodePicture     *prev = pic->prev;
+    VulkanEncodeAV1Picture  *av1prev = prev ? prev->priv_data : NULL;
+    AV1RawOBU                    *fh_obu = &enc->fh;
+    AV1RawFrameHeader                *frame_header = &fh_obu->obu.frame.header;
+    switch (pic->type) {
+    case FF_VK_FRAME_I:
+    case FF_VK_FRAME_KEY:
+        frame_header->frame_type = AV1_FRAME_KEY;
+        frame_header->refresh_frame_flags = 0xff;
+        frame_header->base_q_idx = 0;
+        break;
+    case FF_VK_FRAME_P:
+        frame_header->frame_type = AV1_FRAME_INTER;
+        break;
+    case FF_VK_FRAME_B:
+        frame_header->frame_type = AV1_FRAME_INTER;
+        break;
+    };
+    av1pic->vkav1_fh = (StdVideoAV1MESAFrameHeader) {
+        .flags = (StdVideoAV1MESAFrameHeaderFlags) {
+            .error_resilient_mode = frame_header->error_resilient_mode,
+            .disable_cdf_update = frame_header->disable_cdf_update,
+            .use_superres = frame_header->use_superres,
+            .render_and_frame_size_different = frame_header->render_and_frame_size_different,
+            .allow_screen_content_tools = frame_header->allow_screen_content_tools,
+            .is_filter_switchable = frame_header->is_filter_switchable,
+            .force_integer_mv = frame_header->force_integer_mv,
+            .frame_size_override_flag = frame_header->frame_size_override_flag,
+            .buffer_removal_time_present_flag = frame_header->buffer_removal_time_present_flag,
+            .allow_intrabc = frame_header->allow_intrabc,
+            .frame_refs_short_signaling = frame_header->frame_refs_short_signaling,
+            .allow_high_precision_mv = frame_header->allow_high_precision_mv,
+            .is_motion_mode_switchable = frame_header->is_motion_mode_switchable,
+            .use_ref_frame_mvs = frame_header->use_ref_frame_mvs,
+            .disable_frame_end_update_cdf = frame_header->disable_frame_end_update_cdf,
+            .allow_warped_motion = frame_header->allow_warped_motion,
+            .reduced_tx_set = frame_header->reduced_tx_set,
+            .reference_select = frame_header->reference_select,
+            .skip_mode_present = frame_header->skip_mode_present,
+            .delta_q_present = frame_header->delta_q_present,
+        },
+        .frame_type = frame_header->frame_type,
+        .order_hint = frame_header->order_hint,
+        .frame_width_minus_1 = frame_header->frame_width_minus_1,
+        .frame_height_minus_1 = frame_header->frame_height_minus_1,
+        .coded_denom = frame_header->coded_denom,
+        .render_width_minus_1 = frame_header->render_width_minus_1,
+        .render_height_minus_1 = frame_header->render_height_minus_1,
+        .refresh_frame_flags = frame_header->refresh_frame_flags,
+        .interpolation_filter = frame_header->interpolation_filter,
+        .tx_mode = frame_header->tx_mode,
+    };
+    av1pic->vkav1pic_info = (VkVideoEncodeAV1PictureInfoMESA) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_PICTURE_INFO_MESA,
+        .pNext = NULL,
+        .frame_header = &av1pic->vkav1_fh,
+    };
+
+    pic->codec_info = &av1pic->vkav1pic_info;
+    return 0;
+}
+
 static const FFCodecDefault vulkan_encode_av1_defaults[] = {
     { "b",              "0"   },
     { "g",              "120" },
@@ -196,6 +306,7 @@ static const FFCodecDefault vulkan_encode_av1_defaults[] = {
 static const FFVulkanEncoder encoder = {
     .pic_priv_data_size = sizeof(VulkanEncodeAV1Picture),
     .write_stream_headers = vulkan_encode_av1_write_sequence_header,
+    .init_pic_headers = vulkan_encode_av1_init_pic_headers,
 };
 
 static av_cold int vulkan_encode_av1_init(AVCodecContext *avctx)
@@ -203,6 +314,8 @@ static av_cold int vulkan_encode_av1_init(AVCodecContext *avctx)
     int err;
     VulkanEncodeAV1Context *enc = avctx->priv_data;
 
+    if (avctx->profile == FF_PROFILE_UNKNOWN)
+        avctx->profile = enc->profile;
     enc->vkprofile = (VkVideoEncodeAV1ProfileInfoMESA) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_PROFILE_INFO_MESA,
     };
@@ -215,6 +328,8 @@ static av_cold int vulkan_encode_av1_init(AVCodecContext *avctx)
     if (err < 0)
         return err;
 
+    enc->gop_size = avctx->gop_size;
+    enc->vkenc.gop_size = enc->gop_size;
     err = ff_vulkan_encode_init(avctx, &enc->vkenc, &enc->vkprofile, &enc->vkcaps,
                                 &encoder, 0, 0);
     if (err < 0)
@@ -225,6 +340,11 @@ static av_cold int vulkan_encode_av1_init(AVCodecContext *avctx)
     err = vulkan_encode_av1_init_sequence_params(avctx);
     if (err < 0)
         return err;
+
+    err = vulkan_encode_av1_create_session(avctx);
+    if (err < 0)
+        return err;
+
     return 0;
 };
 
@@ -251,7 +371,16 @@ static void vulkan_encode_av1_flush(AVCodecContext *avctx)
 #define FLAGS (AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM)
 static const AVOption vulkan_encode_av1_options[] = {
     FF_VK_ENCODE_COMMON_OPTS
+    { "profile", "Set profile (seq_profile)",
+      OFFSET(profile), AV_OPT_TYPE_INT,
+      { .i64 = FF_PROFILE_AV1_MAIN }, FF_PROFILE_UNKNOWN, 0xff, FLAGS, "profile" },
 
+#define PROFILE(name, value)  name, NULL, 0, AV_OPT_TYPE_CONST, \
+    { .i64 = value }, 0, 0, FLAGS, "profile"
+    { PROFILE("main",               FF_PROFILE_AV1_MAIN) },
+    { PROFILE("high",               FF_PROFILE_AV1_HIGH) },
+    { PROFILE("professional",       FF_PROFILE_AV1_PROFESSIONAL) },
+#undef PROFILE
     { NULL },
 };
 
