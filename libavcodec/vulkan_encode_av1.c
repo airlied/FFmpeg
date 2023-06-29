@@ -38,8 +38,8 @@ typedef struct VulkanEncodeAV1Context {
 typedef struct VulkanEncodeAV1Picture {
     StdVideoAV1MESAFrameHeader vkav1_fh;
     VkVideoEncodeAV1PictureInfoMESA vkav1pic_info;
-    //    VkVideoEncodeAV1RateControlInfoEXT vkrc_info;
-    //    VkVideoEncodeAV1RateControlLayerInfoEXT vkrc_layer_info;
+    VkVideoEncodeAV1RateControlInfoMESA vkrc_info;
+    VkVideoEncodeAV1RateControlLayerInfoMESA vkrc_layer_info;
 } VulkanEncodeAV1Picture;
 
 static int vulkan_encode_av1_add_obu(AVCodecContext *avctx,
@@ -241,6 +241,8 @@ static int vulkan_encode_av1_init_pic_headers(AVCodecContext *avctx,
     VulkanEncodeAV1Picture  *av1prev = prev ? prev->priv_data : NULL;
     AV1RawOBU                    *fh_obu = &enc->fh;
     AV1RawFrameHeader                *frame_header = &fh_obu->obu.frame.header;
+    int qp = pic->qp;
+
     switch (pic->type) {
     case FF_VK_FRAME_I:
     case FF_VK_FRAME_KEY:
@@ -295,7 +297,23 @@ static int vulkan_encode_av1_init_pic_headers(AVCodecContext *avctx,
         .frame_header = &av1pic->vkav1_fh,
     };
 
+    av1pic->vkrc_info = (VkVideoEncodeAV1RateControlInfoMESA) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_RATE_CONTROL_INFO_MESA,
+    };
+
+    av1pic->vkrc_layer_info = (VkVideoEncodeAV1RateControlLayerInfoMESA) {
+        .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_RATE_CONTROL_LAYER_INFO_MESA,
+        .pNext = NULL,
+        .minQp = (VkVideoEncodeAV1QpMESA){ qp, qp, qp },
+        .maxQp = (VkVideoEncodeAV1QpMESA){ qp, qp, qp },
+        .useMinQp = 1,
+        .useMaxQp = 1,
+    };
+
     pic->codec_info = &av1pic->vkav1pic_info;
+    pic->codec_layer    = &av1pic->vkrc_info;
+    pic->codec_rc_layer = &av1pic->vkrc_layer_info;
+
     return 0;
 }
 
