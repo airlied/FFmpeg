@@ -313,7 +313,31 @@ static int vulkan_encode_av1_init_pic_headers(AVCodecContext *avctx,
     pic->codec_info = &av1pic->vkav1pic_info;
     pic->codec_layer    = &av1pic->vkrc_info;
     pic->codec_rc_layer = &av1pic->vkrc_layer_info;
+    return 0;
+}
 
+static int vulkan_encode_av1_write_filler(AVCodecContext *avctx, uint32_t filler,
+                                           uint8_t *data, size_t *data_len)
+{
+    VulkanEncodeAV1Context    *enc = avctx->priv_data;    
+    AV1RawOBU padding;
+    int ret;
+    CodedBitstreamFragment *obu = &enc->current_obu;
+
+    memset(&padding, 0, sizeof(padding));
+    padding.header.obu_type = AV1_OBU_PADDING;
+    padding.obu.padding.payload = malloc(filler);
+    padding.obu.padding.payload_size = filler;
+
+    ret = vulkan_encode_av1_add_obu(avctx, obu, AV1_OBU_PADDING, &padding);
+    if (ret < 0)
+        goto end;
+
+    ret = vulkan_encode_av1_write_obu(avctx, data, data_len, obu);
+
+    free(padding.obu.padding.payload);
+end:
+    ff_cbs_fragment_reset(obu);    
     return 0;
 }
 
@@ -327,6 +351,8 @@ static const FFVulkanEncoder encoder = {
     .pic_priv_data_size = sizeof(VulkanEncodeAV1Picture),
     .write_stream_headers = vulkan_encode_av1_write_sequence_header,
     .init_pic_headers = vulkan_encode_av1_init_pic_headers,
+    .filler_header_size = 1,
+    .write_filler = vulkan_encode_av1_write_filler,
 };
 
 static av_cold int vulkan_encode_av1_init(AVCodecContext *avctx)
