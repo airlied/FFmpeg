@@ -108,7 +108,7 @@ static int vulkan_encode_av1_init_sequence_params(AVCodecContext *avctx)
     sh->frame_width_bits_minus_1  = av_log2(avctx->width);
     sh->frame_height_bits_minus_1 = av_log2(avctx->height);
     sh->max_frame_width_minus_1   = avctx->width - 1;
-    sh->max_frame_height_minus_1  = avctx->height - 1;
+    sh->max_frame_height_minus_1  = avctx->height + 1;
     sh->enable_order_hint         = 1;
     sh->order_hint_bits_minus_1   = av_clip(av_log2(avctx->gop_size), 0, 7);
     sh->seq_tier[0]               = enc->tier;
