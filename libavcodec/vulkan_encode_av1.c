@@ -36,6 +36,7 @@ typedef struct VulkanEncodeAV1Context {
 } VulkanEncodeAV1Context;
 
 typedef struct VulkanEncodeAV1Picture {
+    int64_t last_idr_frame;
     StdVideoAV1MESAFrameHeader vkav1_fh;
     VkVideoEncodeAV1PictureInfoMESA vkav1pic_info;
     VkVideoEncodeAV1RateControlInfoMESA vkrc_info;
@@ -160,6 +161,7 @@ static int vulkan_encode_av1_init_sequence_params(AVCodecContext *avctx)
 
     vkseq->flags.use_128x128_superblock = sh->use_128x128_superblock;
     vkseq->flags.enable_order_hint = sh->enable_order_hint;
+    vkseq->flags.enable_cdef = sh->enable_cdef;
 
     vkseq->color_config.subsampling_x = sh->color_config.subsampling_x;
     vkseq->color_config.subsampling_y = sh->color_config.subsampling_y;
@@ -242,21 +244,41 @@ static int vulkan_encode_av1_init_pic_headers(AVCodecContext *avctx,
     AV1RawOBU                    *fh_obu = &enc->fh;
     AV1RawFrameHeader                *frame_header = &fh_obu->obu.frame.header;
     int qp = pic->qp;
+    int i;
 
+    memset(fh_obu, 0, sizeof(*fh_obu));
     switch (pic->type) {
     case FF_VK_FRAME_I:
     case FF_VK_FRAME_KEY:
         frame_header->frame_type = AV1_FRAME_KEY;
         frame_header->refresh_frame_flags = 0xff;
         frame_header->base_q_idx = 0;
+        av1pic->last_idr_frame = pic->display_order;
         break;
     case FF_VK_FRAME_P:
         frame_header->frame_type = AV1_FRAME_INTER;
+        frame_header->refresh_frame_flags = 0xff;
+        for (i=0; i < AV1_NUM_REF_FRAMES; i++)
+            frame_header->ref_order_hint[i] = pic->refs[0]->display_order - av1pic->last_idr_frame;
         break;
     case FF_VK_FRAME_B:
         frame_header->frame_type = AV1_FRAME_INTER;
+        frame_header->refresh_frame_flags = 0x0;
+        frame_header->reference_select = 1;
         break;
     };
+
+    frame_header->show_frame                = pic->display_order <= pic->encode_order;
+    frame_header->showable_frame            = frame_header->frame_type != AV1_FRAME_KEY;
+    frame_header->frame_width_minus_1       = avctx->width - 1;
+    frame_header->frame_height_minus_1      = avctx->height - 1;
+    frame_header->render_width_minus_1      = frame_header->frame_width_minus_1;
+    frame_header->render_height_minus_1     = frame_header->frame_height_minus_1;
+    frame_header->order_hint                = pic->display_order - av1pic->last_idr_frame;
+    frame_header->uniform_tile_spacing_flag = 1;
+
+    if (frame_header->frame_type == AV1_FRAME_KEY)
+        frame_header->error_resilient_mode = 1;
     av1pic->vkav1_fh = (StdVideoAV1MESAFrameHeader) {
         .flags = (StdVideoAV1MESAFrameHeaderFlags) {
             .error_resilient_mode = frame_header->error_resilient_mode,
@@ -280,8 +302,13 @@ static int vulkan_encode_av1_init_pic_headers(AVCodecContext *avctx,
             .skip_mode_present = frame_header->skip_mode_present,
             .delta_q_present = frame_header->delta_q_present,
         },
+        .frame_to_show_map_idx = frame_header->frame_to_show_map_idx,
+        .frame_presentation_time = frame_header->frame_presentation_time,
+        .display_frame_id = frame_header->display_frame_id,
         .frame_type = frame_header->frame_type,
+        .current_frame_id = frame_header->current_frame_id,
         .order_hint = frame_header->order_hint,
+        .primary_ref_frame = frame_header->primary_ref_frame,
         .frame_width_minus_1 = frame_header->frame_width_minus_1,
         .frame_height_minus_1 = frame_header->frame_height_minus_1,
         .coded_denom = frame_header->coded_denom,
@@ -290,6 +317,23 @@ static int vulkan_encode_av1_init_pic_headers(AVCodecContext *avctx,
         .refresh_frame_flags = frame_header->refresh_frame_flags,
         .interpolation_filter = frame_header->interpolation_filter,
         .tx_mode = frame_header->tx_mode,
+        .delta_q = (StdVideoAV1MESADeltaQ) {
+            .flags = (StdVideoAV1MESADeltaQFlags) {
+                .delta_lf_present = frame_header->delta_lf_present,
+                .delta_lf_multi = frame_header->delta_lf_multi,
+            },
+            .delta_q_res = frame_header->delta_q_res,
+            .delta_lf_res = frame_header->delta_lf_res,
+        },
+        .cdef = (StdVideoAV1MESACDEF) {
+            .damping_minus_3 = frame_header->cdef_damping_minus_3,
+            .bits = frame_header->cdef_bits,
+        },
+        .lr = (StdVideoAV1MESALoopRestoration) {
+            .lr_unit_shift = frame_header->lr_unit_shift,
+            .lr_uv_shift = frame_header->lr_uv_shift,
+            .lr_type = { frame_header->lr_type[0], frame_header->lr_type[1], frame_header->lr_type[2] },
+        },
     };
     av1pic->vkav1pic_info = (VkVideoEncodeAV1PictureInfoMESA) {
         .sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_AV1_PICTURE_INFO_MESA,
