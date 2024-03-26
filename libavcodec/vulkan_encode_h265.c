@@ -27,6 +27,16 @@
 
 #include "vulkan_encode.h"
 
+const FFVulkanEncodeDescriptor ff_vk_enc_hevc_desc = {
+    .codec_id         = AV_CODEC_ID_H265,
+    .encode_extension = FF_VK_EXT_VIDEO_ENCODE_H265,
+    .encode_op        = VK_VIDEO_CODEC_OPERATION_ENCODE_H265_BIT_KHR,
+    .ext_props = {
+        .extensionName = VK_STD_VULKAN_VIDEO_CODEC_H265_ENCODE_EXTENSION_NAME,
+        .specVersion   = VK_STD_VULKAN_VIDEO_CODEC_H265_ENCODE_SPEC_VERSION,
+    },
+};
+
 enum UnitElems {
     UNIT_AUD        = 1 << 0,
 };

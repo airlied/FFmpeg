@@ -28,6 +28,14 @@
 #define MAX_ASYNC_DEPTH 64
 #define MAX_PICTURE_REFERENCES 2
 
+typedef struct FFVulkanEncodeDescriptor {
+    enum AVCodecID                   codec_id;
+    FFVulkanExtensions               encode_extension;
+    VkVideoCodecOperationFlagBitsKHR encode_op;
+
+    VkExtensionProperties ext_props;
+} FFVulkanEncodeDescriptor;
+
 enum FFVkFrameType {
     FF_VK_FRAME_KEY, /* IDR in mpeg-ese */
     FF_VK_FRAME_I,   /* mpeg-only */

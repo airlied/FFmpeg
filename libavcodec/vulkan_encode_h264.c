@@ -27,6 +27,16 @@
 
 #include "vulkan_encode.h"
 
+const FFVulkanEncodeDescriptor ff_vk_enc_h264_desc = {
+    .codec_id         = AV_CODEC_ID_H264,
+    .encode_extension = FF_VK_EXT_VIDEO_ENCODE_H264,
+    .encode_op        = VK_VIDEO_CODEC_OPERATION_ENCODE_H264_BIT_KHR,
+    .ext_props = {
+        .extensionName = VK_STD_VULKAN_VIDEO_CODEC_H264_ENCODE_EXTENSION_NAME,
+        .specVersion   = VK_STD_VULKAN_VIDEO_CODEC_H264_ENCODE_SPEC_VERSION,
+    },
+};
+
 enum UnitElems {
     UNIT_AUD        = 1 << 0,
     UNIT_TIMING     = 1 << 1,
@@ -989,7 +999,7 @@ static av_cold int vulkan_encode_h264_init(AVCodecContext *avctx)
         len = snprintf(NULL, 0,
                        "%s / Vulkan video %i.%i.%i / %s %i.%i.%i / %s",
                        LIBAVCODEC_IDENT,
-                       CODEC_VER(ff_vk_enc_ext[avctx->codec_id].specVersion),
+                       CODEC_VER(ff_vk_enc_h264_desc.ext_props.specVersion),
                        enc->vkenc.s.driver_props.driverName,
                        CODEC_VER(enc->vkenc.s.props.properties.driverVersion),
                        enc->vkenc.s.props.properties.deviceName);
@@ -1002,7 +1012,7 @@ static av_cold int vulkan_encode_h264_init(AVCodecContext *avctx)
             len = snprintf(enc->sei_identifier_string, len + 1,
                            "%s / Vulkan video %i.%i.%i / %s %i.%i.%i / %s",
                            LIBAVCODEC_IDENT,
-                           CODEC_VER(ff_vk_enc_ext[avctx->codec_id].specVersion),
+                           CODEC_VER(ff_vk_enc_h264_desc.ext_props.specVersion),
                            enc->vkenc.s.driver_props.driverName,
                            CODEC_VER(enc->vkenc.s.props.properties.driverVersion),
                            enc->vkenc.s.props.properties.deviceName);

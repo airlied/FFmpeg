@@ -17,19 +17,36 @@
  */
 
 #include "vulkan_encode.h"
+#include "config_components.h"
+#include "libavutil/avassert.h"
+#include "libavutil/vulkan_loader.h"
 
 #include <vk_video/vulkan_video_codecs_common.h> // TODO: REMOVE WHEN THE HEADERS BUG IS FIXED
 
-const VkExtensionProperties ff_vk_enc_ext[AV_CODEC_ID_FIRST_AUDIO] = {
-    [AV_CODEC_ID_H264] = (VkExtensionProperties) {
-        .extensionName = VK_STD_VULKAN_VIDEO_CODEC_H264_ENCODE_EXTENSION_NAME,
-        .specVersion   = VK_STD_VULKAN_VIDEO_CODEC_H264_ENCODE_SPEC_VERSION,
-    },
-    [AV_CODEC_ID_HEVC] = (VkExtensionProperties) {
-        .extensionName = VK_STD_VULKAN_VIDEO_CODEC_H265_ENCODE_EXTENSION_NAME,
-        .specVersion   = VK_STD_VULKAN_VIDEO_CODEC_H265_ENCODE_SPEC_VERSION,
-    },
+#if CONFIG_H264_VULKAN_HWACCEL
+extern const FFVulkanEncodeDescriptor ff_vk_enc_h264_desc;
+#endif
+#if CONFIG_HEVC_VULKAN_HWACCEL
+extern const FFVulkanEncodeDescriptor ff_vk_enc_hevc_desc;
+#endif
+
+static const FFVulkanEncodeDescriptor *enc_descs[] = {
+#if CONFIG_H264_VULKAN_HWACCEL
+    &ff_vk_enc_h264_desc,
+#endif
+#if CONFIG_HEVC_VULKAN_HWACCEL
+    &ff_vk_enc_hevc_desc,
+#endif
 };
+
+static const FFVulkanEncodeDescriptor *get_codecdesc(enum AVCodecID codec_id)
+{
+    for (size_t i = 0; i < FF_ARRAY_ELEMS(enc_descs); i++)
+        if (enc_descs[i]->codec_id == codec_id)
+            return enc_descs[i];
+    av_assert1(!"no codec descriptor");
+    return NULL;
+}
 
 const AVCodecHWConfigInternal *const ff_vulkan_encode_hw_configs[] = {
     HW_CONFIG_ENCODER_FRAMES(VULKAN, VULKAN),
@@ -135,7 +152,7 @@ av_cold int ff_vulkan_encode_init(AVCodecContext *avctx, FFVulkanEncodeContext *
     FFVulkanFunctions *vk = &ctx->s.vkfn;
     FFVulkanContext *s = &ctx->s;
     FFVulkanExtensions extensions;
-    const struct FFVkCodecMap *vk_codec = &ff_vk_codec_map[avctx->codec_id];
+    const FFVulkanEncodeDescriptor *vk_desc = get_codecdesc(avctx->codec_id);
     const AVPixFmtDescriptor *desc;
 
     AVHWFramesContext *dpb_frames;
@@ -191,7 +208,7 @@ av_cold int ff_vulkan_encode_init(AVCodecContext *avctx, FFVulkanEncodeContext *
         av_log(avctx, AV_LOG_ERROR, "Device does not support the %s extension!\n",
                VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME);
         return AVERROR(ENOSYS);
-    } else if (!(vk_codec->encode_extension & extensions)) {
+    } else if (!(vk_desc->encode_extension & extensions)) {
         av_log(avctx, AV_LOG_ERROR, "Device does not support decoding %s!\n",
                avcodec_get_name(avctx->codec_id));
         return AVERROR(ENOSYS);
@@ -211,7 +228,7 @@ av_cold int ff_vulkan_encode_init(AVCodecContext *avctx, FFVulkanEncodeContext *
     qf = ff_vk_qf_init(s, &ctx->qf_enc, VK_QUEUE_VIDEO_ENCODE_BIT_KHR);
 
     /* Check for support */
-    if (!(s->video_props[qf].videoCodecOperations & vk_codec->encode_op)) {
+    if (!(s->video_props[qf].videoCodecOperations & vk_desc->encode_op)) {
         av_log(avctx, AV_LOG_ERROR, "Encoding %s not supported on the given "
                "queue family %i!\n", avcodec_get_name(avctx->codec_id), qf);
         return AVERROR(EINVAL);
@@ -229,7 +246,7 @@ av_cold int ff_vulkan_encode_init(AVCodecContext *avctx, FFVulkanEncodeContext *
     /* Load up the profile now, we need it to create a query pool */
     ctx->profile.sType               = VK_STRUCTURE_TYPE_VIDEO_PROFILE_INFO_KHR;
     ctx->profile.pNext               = &ctx->usage_info;
-    ctx->profile.videoCodecOperation = vk_codec->encode_op;
+    ctx->profile.videoCodecOperation = vk_desc->encode_op;
     ctx->profile.chromaSubsampling   = ff_vk_subsampling_from_av_desc(desc);
     ctx->profile.lumaBitDepth        = ff_vk_depth_from_av_depth(desc->comp[0].depth);
     ctx->profile.chromaBitDepth      = ctx->profile.lumaBitDepth;
@@ -297,7 +314,7 @@ av_cold int ff_vulkan_encode_init(AVCodecContext *avctx, FFVulkanEncodeContext *
            ctx->caps.maxActiveReferencePictures);
     av_log(avctx, AV_LOG_VERBOSE, "    Codec header version: %i.%i.%i (driver), %i.%i.%i (compiled)\n",
            CODEC_VER(ctx->caps.stdHeaderVersion.specVersion),
-           CODEC_VER(ff_vk_enc_ext[avctx->codec_id].specVersion));
+           CODEC_VER(vk_desc->ext_props.specVersion));
     av_log(avctx, AV_LOG_VERBOSE, "    encode quality levels: %i\n",
            ctx->enc_caps.maxQualityLevels);
     av_log(avctx, AV_LOG_VERBOSE, "    encode image width alignment: %i\n",
@@ -385,7 +402,7 @@ av_cold int ff_vulkan_encode_init(AVCodecContext *avctx, FFVulkanEncodeContext *
     session_create.maxActiveReferencePictures = ctx->caps.maxActiveReferencePictures;
     session_create.pictureFormat = ctx->pic_format;
     session_create.referencePictureFormat = session_create.pictureFormat;
-    session_create.pStdHeaderVersion = &ff_vk_enc_ext[avctx->codec_id];
+    session_create.pStdHeaderVersion = &vk_desc->ext_props;
 
     err = ff_vk_video_common_init(avctx, s, &ctx->common, &session_create);
     if (err < 0)
