@@ -125,6 +125,32 @@ typedef struct VulkanEncodeH264Picture {
     StdVideoEncodeH264RefPicMarkingEntry marks[37];
 } VulkanEncodeH264Picture;
 
+static StdVideoH264LevelIdc convert_to_vk_level_idc(int level_idc)
+{
+    switch (level_idc) {
+    case 10: return STD_VIDEO_H264_LEVEL_IDC_1_0;
+    case 11: return STD_VIDEO_H264_LEVEL_IDC_1_1;
+    case 12: return STD_VIDEO_H264_LEVEL_IDC_1_2;
+    case 13: return STD_VIDEO_H264_LEVEL_IDC_1_3;
+    case 20: return STD_VIDEO_H264_LEVEL_IDC_2_0;
+    case 21: return STD_VIDEO_H264_LEVEL_IDC_2_1;
+    case 22: return STD_VIDEO_H264_LEVEL_IDC_2_2;
+    case 30: return STD_VIDEO_H264_LEVEL_IDC_3_0;
+    case 31: return STD_VIDEO_H264_LEVEL_IDC_3_1;
+    case 32: return STD_VIDEO_H264_LEVEL_IDC_3_2;
+    case 40: return STD_VIDEO_H264_LEVEL_IDC_4_0;
+    case 41: return STD_VIDEO_H264_LEVEL_IDC_4_1;
+    case 42: return STD_VIDEO_H264_LEVEL_IDC_4_2;
+    case 50: return STD_VIDEO_H264_LEVEL_IDC_5_0;
+    case 51: return STD_VIDEO_H264_LEVEL_IDC_5_1;
+    case 52: return STD_VIDEO_H264_LEVEL_IDC_5_2;
+    case 60: return STD_VIDEO_H264_LEVEL_IDC_6_0;
+    case 61: return STD_VIDEO_H264_LEVEL_IDC_6_1;
+    default:
+    case 62: return STD_VIDEO_H264_LEVEL_IDC_6_2;
+    }
+}
+
 static av_cold int vulkan_encode_h264_init_seq_params(AVCodecContext *avctx)
 {
     VulkanEncodeH264Context             *enc = avctx->priv_data;
@@ -166,7 +192,7 @@ static av_cold int vulkan_encode_h264_init_seq_params(AVCodecContext *avctx)
         enc->dpb_frames = 1 + enc->max_b_depth;
 
     if (avctx->level != FF_LEVEL_UNKNOWN) {
-        sps->level_idc = avctx->level;
+        sps->level_idc = convert_to_vk_level_idc(avctx->level);
     } else {
         const H264LevelDescriptor *level;
         int framerate;
@@ -186,11 +212,11 @@ static av_cold int vulkan_encode_h264_init_seq_params(AVCodecContext *avctx)
             av_log(avctx, AV_LOG_VERBOSE, "Using level %s.\n", level->name);
             if (level->constraint_set3_flag)
                 sps->constraint_set3_flag = 1;
-            sps->level_idc = level->level_idc;
+            sps->level_idc = convert_to_vk_level_idc(level->level_idc);
         } else {
             av_log(avctx, AV_LOG_WARNING, "Stream will not conform "
                    "to any level: using level 6.2.\n");
-            sps->level_idc = 62;
+            sps->level_idc = convert_to_vk_level_idc(62);
         }
     }
 
