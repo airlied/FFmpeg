@@ -458,7 +458,7 @@ vulkan_encode_h265_init_sequence_params(AVCodecContext *avctx) {
     pps->cabac_init_present_flag = 1;
     pps->dependent_slice_segments_enabled_flag = 1;
     pps->init_qp_minus26 = 0; // TODO - fix, I have no idea
-    pps->cu_qp_delta_enabled_flag = 0;//(ctx->va_rc_mode != VA_RC_CQP);
+    pps->cu_qp_delta_enabled_flag = 1;//(ctx->va_rc_mode != VA_RC_CQP);
     pps->diff_cu_qp_delta_depth   = 0;
 
     if (enc->caps.stdSyntaxFlags &
